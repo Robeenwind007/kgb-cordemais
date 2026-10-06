@@ -295,8 +295,9 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.14.0', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.14.1', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.14.1', d: '06/10/2026', items: ['Correction : export PDF en erreur quand une remarque longue est coupée sur deux pages'] },
   { v: '1.14.0', d: '06/10/2026', items: ['PDF : présentation sobre sur fond blanc (titres serif, filets or et bordeaux), sans logo ni bandeau sombre'] },
   { v: '1.13.1', d: '06/10/2026', items: ['Gemini retiré ; 4e choix « Copier le prompt » pour utiliser n\'importe quelle autre IA'] },
   { v: '1.13.0', d: '06/10/2026', items: ['Bouton « Résumer seulement dans un mémo » : prompt de synthèse adapté au type de documents, mémo PDF d\'une à deux pages'] },
@@ -1419,7 +1420,7 @@ async function exportPdf() {
   sel.sort((a, b) => DOMAINS.indexOf(a.dom) - DOMAINS.indexOf(b.dom) || SEV_ORDER[a.sev] - SEV_ORDER[b.sev]);
   const used = DOMAINS.filter(d => sel.some(f => f.dom === d));
   const attach = $('#attachChk').checked && !!window.PDFLib && state.docs.some(d => d.bytes && d.pages.length);
-  const refLinks = [], rowPos = {}, holders = [];
+  const refLinks = [], rowPos = {}, holders = [], linked = new Set();
   const PH = doc.internal.pageSize.getHeight();
   const curPage = () => doc.internal.getCurrentPageInfo().pageNumber;
   const tiles = [], anchors = {};
@@ -1467,6 +1468,8 @@ async function exportPdf() {
       anchors[d] = { page: curPage(), top: Math.max(0, y - 4) };
       doc.outline.add(null, `${d} (${items.length})`, { pageNumber: curPage() });
       y += 13;
+      const byNum = {}; items.forEach(f => byNum[numOf(f)] = f);
+      const rowF = c => (Array.isArray(c.row.raw) && byNum[parseInt(c.row.raw[0], 10)]) || items[c.row.index];
       doc.autoTable({
         startY: y, margin: { left: M, right: M, bottom: 18 },
         head: [['N°', 'Point à revoir', 'Référence', 'Priorité']],
@@ -1482,14 +1485,17 @@ async function exportPdf() {
         columnStyles: { 0: { cellWidth: 9, halign: 'center', fontStyle: 'bold' }, 2: { cellWidth: 44 }, 3: { cellWidth: 21, fontStyle: 'bold', fontSize: 7.6 } },
         didParseCell: c => {
           if (c.section !== 'body') return;
-          if (c.column.index === 3) c.cell.styles.textColor = sevCol[items[c.row.index].sev];
-          if (c.column.index === 2 && attach && items[c.row.index].refs.some(r => resolveRef(r))) c.cell.styles.textColor = [25, 90, 190];
+          const f = rowF(c); if (!f) return;
+          if (c.column.index === 3) c.cell.styles.textColor = sevCol[f.sev];
+          if (c.column.index === 2 && attach && f.refs.some(r => resolveRef(r))) c.cell.styles.textColor = [25, 90, 190];
         },
         didDrawCell: c => {
           if (c.section !== 'body') return;
-          const f = items[c.row.index], pg = curPage();
-          if (c.column.index === 0) rowPos[numOf(f)] = { page: pg, y: c.cell.y };
-          if (c.column.index === 2 && attach) {
+          const f = rowF(c), pg = curPage(); if (!f) return;
+          // une ligne coupée sur deux pages est dessinée deux fois : on ne garde que sa première partie
+          if (c.column.index === 0 && !rowPos[numOf(f)]) rowPos[numOf(f)] = { page: pg, y: c.cell.y };
+          if (c.column.index === 2 && attach && !linked.has(numOf(f))) {
+            linked.add(numOf(f));
             const k = f.refs.length || 1;
             f.refs.forEach((r, i) => refLinks.push({ r, num: numOf(f), page: pg, x: c.cell.x, y: c.cell.y + i * c.cell.height / k, w: c.cell.width, h: c.cell.height / k }));
           }
