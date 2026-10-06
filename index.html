@@ -193,7 +193,7 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
       <p class="muted">Analyse automatique par règles : chaque point est une alerte à vérifier, pas une certitude. Décochez ceux qui ne sont pas pertinents, ajoutez vos commentaires, ils seront repris dans le PDF.</p>
       <div class="sticky-actions">
         <button class="btn" id="allBtn">Tout cocher / décocher</button>
-        <button class="btn" id="claudeBtn">🤖 Approfondir avec Claude</button>
+        <button class="btn" id="claudeBtn">🤖 Approfondir avec une IA</button>
         <button class="btn brass" id="pdfBtn">⬇ Exporter en PDF</button>
       </div>
     </section>
@@ -208,18 +208,22 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 </dialog>
 
 <dialog id="claudeDlg" class="wide">
-  <h3>Approfondir avec Claude</h3>
+  <h3>Approfondir avec une IA</h3>
   <ol>
-    <li>« Ouvrir dans Claude » : une nouvelle conversation s'ouvre avec le prompt déjà saisi (il est aussi copié dans le presse-papier).</li>
-    <li><b>Joignez les PDF</b> dans Claude avant d'envoyer — un lien ne peut pas transporter de fichiers.</li>
-    <li>Copiez toute la réponse de Claude et collez-la dans le cadre du bas, puis « Importer ».</li>
+    <li>Ouvrez Claude ou ChatGPT : une nouvelle conversation s'ouvre avec le prompt déjà saisi (il est aussi copié dans le presse-papier).</li>
+    <li><b>Joignez les PDF</b> avant d'envoyer — un lien ne peut pas transporter de fichiers.</li>
+    <li>Copiez toute la réponse de l'IA et collez-la dans le cadre du bas, puis « Importer ».</li>
   </ol>
   <textarea id="promptTxt" rows="7" readonly></textarea>
   <div class="row" style="margin:8px 0 16px">
-    <button class="btn primary sm" id="openClaudeBtn">↗ Ouvrir dans Claude</button>
+    <button class="btn primary sm open-ai" data-ai="Claude">↗ Ouvrir dans Claude</button>
+    <button class="btn primary sm open-ai" data-ai="ChatGPT">↗ Ouvrir dans ChatGPT</button>
     <button class="btn sm" id="copyPromptBtn">📋 Copier le prompt</button>
   </div>
-  <label class="f">Réponse de Claude
+  <label class="f">Réponse de
+    <select id="aiSrc" style="font:inherit;color:var(--ink);background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;max-width:180px"><option>Claude</option><option>ChatGPT</option></select>
+  </label>
+  <label class="f" style="margin-top:8px">Réponse complète
     <textarea id="answerTxt" rows="6" placeholder="Collez ici la réponse complète (avec le bloc JSON)…"></textarea>
   </label>
   <p class="muted" id="importMsg" style="min-height:1.2em;margin:6px 0 0"></p>
@@ -231,8 +235,9 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.4.0', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.5.0', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.5.0', d: '06/10/2026', items: ['ChatGPT disponible comme IA annexe, au même titre que Claude (prompt prérempli, import de la réponse)', 'Source de chaque point IA indiquée (Claude ou ChatGPT)'] },
   { v: '1.4.0', d: '06/10/2026', items: ['Vignettes par thème (icône, couleur, nombre de points, part prioritaire) servant de filtres', 'PDF : répartition par thème en vignettes, colonne Thème colorée, points regroupés par thème'] },
   { v: '1.3.2', d: '06/10/2026', items: ['Favicon (ICO + PNG) et icône Apple dédiée'] },
   { v: '1.3.1', d: '06/10/2026', items: ['Nouvel insigne « KGB — Kordemais, Gardiens du Budget » (splash, en-tête, icônes, PDF)'] },
@@ -261,7 +266,7 @@ const CATS = {
   incoh:  'Incohérence de montant',
   redite: 'Redite avec écart',
   date:   'Date',
-  ia:     'Analyse Claude'
+  ia:     'Analyse IA'
 };
 const SEV_ORDER = { haute: 0, moyenne: 1, faible: 2 };
 const DOMAIN_META = {
@@ -779,7 +784,7 @@ function renderReport() {
       <div class="hd"><input type="checkbox" ${f.include ? 'checked' : ''} title="Inclure dans le rapport">
         <select class="dom" title="Thème (modifiable)" style="--dc:${DOMAIN_META[f.dom].c}">${DOMAINS.map(d => `<option value="${d}" ${d === f.dom ? 'selected' : ''}>${DOMAIN_META[d].ic} ${d}</option>`).join('')}</select>
         <div class="t">${esc(f.title)}</div><span class="sev">${f.sev}</span></div>
-      <div class="d">${esc(f.detail)} <span class="cat">· ${CATS[f.cat]}</span></div>
+      <div class="d">${esc(f.detail)} <span class="cat">· ${f.cat === 'ia' ? 'Analyse ' + (f.src || 'IA') : CATS[f.cat]}</span></div>
       <ul class="refs">${f.refs.map(r => `<li><b>${esc(r.doc)}</b> — page ${r.page}<q>${esc(r.extract)}</q></li>`).join('')}</ul>
       <textarea rows="1" placeholder="Commentaire / question à poser en séance…">${esc(f.note)}</textarea>
     </article>`).join('')
@@ -831,21 +836,25 @@ async function copyText(txt, ta) {
 $('#claudeBtn').onclick = () => {
   $('#promptTxt').value = buildPrompt();
   $('#importMsg').textContent = '';
+  $('#aiSrc').value = store.get('ai') || 'Claude';
   $('#claudeDlg').showModal();
 };
 const MAX_URL = 7000;
-$('#openClaudeBtn').onclick = async () => {
+const AI_URL = { Claude: 'https://claude.ai/new', ChatGPT: 'https://chatgpt.com/' };
+document.querySelectorAll('.open-ai').forEach(b => b.onclick = async () => {
+  const ai = b.dataset.ai, base = AI_URL[ai];
+  $('#aiSrc').value = ai; store.set('ai', ai);
   const p = $('#promptTxt').value;
   const copied = await copyText(p, $('#promptTxt'));
   const q = encodeURIComponent(p);
   if (q.length <= MAX_URL) {
-    window.open('https://claude.ai/new?q=' + q, '_blank', 'noopener');
-    toast('Joignez les PDF dans Claude puis envoyez');
+    window.open(base + '?q=' + q, '_blank', 'noopener');
+    toast(`Joignez les PDF dans ${ai} puis envoyez`);
   } else {
-    window.open('https://claude.ai/new', '_blank', 'noopener');
+    window.open(base, '_blank', 'noopener');
     toast(copied ? 'Prompt trop long pour le lien : collez-le (déjà copié)' : 'Prompt trop long : copiez-le manuellement');
   }
-};
+});
 $('#copyPromptBtn').onclick = async () => {
   const ok = await copyText($('#promptTxt').value, $('#promptTxt'));
   toast(ok ? 'Prompt copié ✔' : 'Sélectionnez le texte et copiez-le manuellement');
@@ -860,7 +869,7 @@ function parseAnswer(txt) {
   return data;
 }
 $('#importBtn').onclick = () => {
-  const msg = $('#importMsg');
+  const msg = $('#importMsg'), ai = $('#aiSrc').value;
   let data;
   try { data = parseAnswer($('#answerTxt').value); }
   catch (e) { msg.style.color = 'var(--high)'; msg.textContent = '⚠ ' + e.message + ' Vérifiez que toute la réponse a été collée.'; return; }
@@ -871,15 +880,15 @@ $('#importBtn').onclick = () => {
     const ref = String(o.ref_auto || '').match(/A?(\d+)/i);
     const target = ref ? state.findings.find(f => f.id === promptMap[+ref[1] - 1]) : null;
     if (target && /faux/.test(statut)) {
-      target.include = false; target.note = ('Claude : faux positif. ' + (o.explication || '')).trim(); nFp++; continue;
+      target.include = false; target.note = (ai + ' : faux positif. ' + (o.explication || '')).trim(); nFp++; continue;
     }
     if (target && /confirm/.test(statut)) {
-      target.note = ('Confirmé par Claude. ' + (o.explication || '')).trim(); nConf++; continue;
+      target.note = ('Confirmé par ' + ai + '. ' + (o.explication || '')).trim(); nConf++; continue;
     }
     const sev = ['haute', 'moyenne', 'faible'].includes(String(o.priorite).toLowerCase()) ? String(o.priorite).toLowerCase() : 'moyenne';
     const nf = {
       id: nextId++, include: true, note: '', cat: 'ia', sev,
-      title: String(o.titre || 'Point relevé par Claude'),
+      title: String(o.titre || 'Point relevé par ' + ai), src: ai,
       detail: String(o.explication || ''),
       refs: [{ doc: String(o.document || 'Document'), page: o.page ?? '', extract: String(o.extrait || '').slice(0, 300) }]
     };
@@ -891,7 +900,7 @@ $('#importBtn').onclick = () => {
   renderReport();
   msg.style.color = 'var(--ok)';
   msg.textContent = `✔ ${nNew} nouveau(x) point(s), ${nConf} confirmé(s), ${nFp} faux positif(s) décoché(s).`;
-  toast('Réponse de Claude intégrée');
+  toast(`Réponse de ${ai} intégrée`);
 };
 
 $('#allBtn').onclick = () => { const v = !state.findings.every(f => f.include); state.findings.forEach(f => f.include = v); renderReport(); };
