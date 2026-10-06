@@ -79,7 +79,7 @@ textarea{resize:vertical;min-height:38px;width:100%}
 input:focus,textarea:focus{outline:2px solid var(--brass2);outline-offset:0}
 .toggle{display:flex;align-items:center;gap:8px;color:var(--ink2);font-size:15px}
 .seg{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:6px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:5px;margin-bottom:6px}
-.seg button{display:flex;align-items:center;gap:10px;text-align:left;border:1px solid transparent;background:none;color:var(--ink2);border-radius:9px;padding:10px 12px}
+.seg button{display:flex;align-items:center;gap:10px;text-align:left;border:1px solid transparent;background:none;color:var(--ink2);border-radius:9px;padding:9px 11px}
 .seg button .si{font-size:24px;line-height:1}
 .seg button b{display:block;color:var(--ink);font-size:15px}
 .seg button small{display:block;font-size:12.5px;color:var(--ink3);line-height:1.3}
@@ -184,6 +184,9 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
         <button data-m="financier" role="radio"><span class="si">💹</span><span><b>Documents financiers</b><small>Comptes, budgets, prévisionnels, plans de financement</small></span></button>
         <button data-m="rh" role="radio"><span class="si">👥</span><span><b>Documents RH</b><small>Contrats de travail, paie, accords, procédures</small></span></button>
         <button data-m="juridique" role="radio"><span class="si">⚖️</span><span><b>Documents juridiques</b><small>Contrats, CGV, statuts, conventions : audit avant signature</small></span></button>
+        <button data-m="notarial" role="radio"><span class="si">🏠</span><span><b>Notarial et immobilier</b><small>Compromis, actes, baux, copropriété, diagnostics</small></span></button>
+        <button data-m="urbanisme" role="radio"><span class="si">📐</span><span><b>Urbanisme et technique</b><small>PC, PLU, notices, CCTP, DPGF, marchés de travaux</small></span></button>
+        <button data-m="informatique" role="radio"><span class="si">💻</span><span><b>Informatique</b><small>Cahiers des charges, specs, contrats SaaS, API, SLA</small></span></button>
         <button data-m="general" role="radio"><span class="si">📄</span><span><b>Documents généraux</b><small>Contrats, devis, rapports, notes : cohérence, calculs, clauses</small></span></button>
       </div>
       <div class="row">
@@ -264,8 +267,9 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.11.0', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.12.0', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.12.0', d: '06/10/2026', items: ['Trois nouveaux types : notarial et immobilier, urbanisme et technique, informatique', 'Prompts IA spécialisés (notaire, urbaniste / bureau d\'études, architecte SI) et thèmes dédiés'] },
   { v: '1.11.0', d: '06/10/2026', items: ['Trois nouveaux types de documents : financiers, RH, juridiques', 'Prompts IA spécialisés (expert-comptable, droit social, avocat d\'affaires) et thèmes dédiés à chaque type', 'Champ « recommandation » repris de la réponse de l\'IA'] },
   { v: '1.10.3', d: '06/10/2026', items: ['Pagination de section (annexe numérotée 1/4, 2/4… à part du document) reconnue comme en-tête/pied de page'] },
   { v: '1.10.2', d: '06/10/2026', items: ['En-têtes, pieds de page et numéros de page (« 2/9 ») écartés de l\'analyse : plus de fausses redites'] },
@@ -398,6 +402,58 @@ Object.assign(DOMAIN_META, {
   'Durée et résiliation': { ic: '⏳', c: '#ef8a3c' }, 'Propriété intellectuelle': { ic: '💡', c: '#c06ad6' }, 'Données personnelles': { ic: '🔐', c: '#3d9be0' },
   'Confidentialité': { ic: '🤫', c: '#5f7a99' }, 'Litiges': { ic: '⚖️', c: '#8b6cff' }, 'Conformité': { ic: '✅', c: '#5bbf62' }
 });
+const DOMAINS_NOT = ['Parties et capacité', 'Désignation du bien', 'Prix et financement', 'Conditions suspensives', 'Diagnostics', 'Servitudes et urbanisme', 'Copropriété', 'Bail', 'Fiscalité', 'Délais', 'Rédaction', 'Gestion'];
+const DOMAIN_RULES_NOT = [
+  ['Diagnostics', /diagnostic|\bdpe\b|amiante|plomb|termites|[ée]lectricit[ée]|\bgaz\b|\berp\b|[ée]tat des risques|assainissement|loi carrez|m[ée]rule|bruit/i],
+  ['Copropriété', /copropri|tanti[èe]mes|millièmes|\blots?\b|syndic|assembl[ée]e g[ée]n[ée]rale|r[èe]glement de copropri|fonds de travaux|[ée]tat dat[ée]|charges de copro/i],
+  ['Bail', /\bbail\b|loyer|preneur|bailleur|locataire|indexation|\birl\b|\bilc\b|\bilat\b|d[ée]p[ôo]t de garantie|cong[ée] pour vente/i],
+  ['Conditions suspensives', /condition suspensive|obtention (d'un|du) pr[êe]t|\bpr[êe]t\b|offre de pr[êe]t|r[ée]alisation des conditions|purge|droit de pr[ée]emption|\bdia\b/i],
+  ['Servitudes et urbanisme', /servitude|urbanisme|\bplu\b|certificat d'urbanisme|permis|alignement|zonage|mitoyen/i],
+  ['Fiscalité', /plus-value|droits de mutation|droits d'enregistrement|\btva\b|frais de notaire|[ée]moluments|taxe fonci[èe]re|exon[ée]ration/i],
+  ['Délais', /d[ée]lai|r[ée]tractation|\bsru\b|r[ée]it[ée]ration|signature de l'acte|au plus tard|date butoir|jouissance|entr[ée]e en possession/i],
+  ['Prix et financement', /\bprix\b|financement|acompte|s[ée]questre|d[ée]p[ôo]t de garantie|commission|honoraires|mobilier|ventilation|apport/i],
+  ['Désignation du bien', /cadastr|section|parcelle|contenance|superficie|surface|d[ée]signation|adresse du bien|lieudit|\bm2\b|m²/i],
+  ['Parties et capacité', /vendeur|acqu[ée]reur|[ée]poux|r[ée]gime matrimonial|\bpacs\b|n[ée]e? le|domicili|capacit[ée]|procuration|mandataire|tutelle|curatelle|soci[ée]t[ée] civile/i]
+];
+const DOMAINS_URB = ["Règles d'urbanisme", 'Autorisations', 'Surfaces et métrés', 'Structure et géotechnique', 'Thermique et énergie', 'Accessibilité-Sécurité', 'Réseaux et VRD', 'Environnement', 'Marchés et prix', 'Planning', 'Rédaction', 'Gestion'];
+const DOMAIN_RULES_URB = [
+  ['Accessibilité-Sécurité', /accessibilit|\bpmr\b|handicap|incendie|[ée]vacuation|d[ée]senfumage|\berp\b|s[ée]curit[ée]|\bigh\b/i],
+  ['Thermique et énergie', /\bre ?2020\b|\brt ?2012\b|thermique|[ée]nerg[ée]tique|isolation|\bbbio\b|\bcep\b|\bic ?[ée]nergie|pompe [àa] chaleur|ventilation|\bvmc\b|photovolta/i],
+  ['Structure et géotechnique', /structure|g[ée]otechni|\bg1\b|\bg2\b|fondation|b[ée]ton|charpente|sismique|portance|\bdtu\b|eurocode/i],
+  ['Réseaux et VRD', /\bvrd\b|voirie|r[ée]seaux?|assainissement|eaux pluviales|raccordement|[ée]clairage|enrob[ée]|canalisation/i],
+  ['Environnement', /environnement|biodiversit|zone humide|natura|[ée]tude d'impact|bruit|pollution|d[ée]chets|espaces? verts?|arbres?/i],
+  ['Autorisations', /permis de construire|permis d'am[ée]nager|d[ée]claration pr[ée]alable|\bpc\b|\bdp\b|\bpa\b|instruction|affichage|recours|arr[êe]t[ée] de permis|\bdaact\b/i],
+  ["Règles d'urbanisme", /\bplui?\b|\bscot\b|zonage|zone u|zone au|hauteur|emprise au sol|implantation|prospect|stationnement|\bces\b|\boap\b|recul|limite s[ée]parative/i],
+  ['Surfaces et métrés', /surface de plancher|\bsdp\b|emprise|m[ée]tr[ée]|quantit[ée]|\bm2\b|m²|\bm3\b|m³|\bml\b|superficie|c[ôo]te|niveau|\bngf\b/i],
+  ['Marchés et prix', /\bdpge?f?\b|\bdqe\b|\bbpu\b|prix unitaire|\bcctp\b|\bccap\b|march[ée]|lot|devis|p[ée]nalit|retenue de garantie|r[ée]vision des prix|avenant/i],
+  ['Planning', /planning|d[ée]lai d'ex[ée]cution|calendrier|phasage|jalon|r[ée]ception|ordre de service|livraison/i]
+];
+const DOMAINS_IT = ['Exigences', 'Architecture', 'API et interfaces', 'Sécurité', 'Données personnelles', 'Performance et SLA', 'Recette', 'Maintenance et support', 'Réversibilité', 'Licences et PI', 'Planning et chiffrage', 'Rédaction', 'Gestion'];
+const DOMAIN_RULES_IT = [
+  ['Données personnelles', /donn[ée]es? personnelles?|\brgpd\b|sous-traitant|\bdpa\b|h[ée]bergement de donn|transfert hors|\bcnil\b|\bdpo\b/i],
+  ['Sécurité', /s[ée]curit[ée]|authentification|\bsso\b|\bmfa\b|chiffrement|chiffrée?s?\b|donn[ée]es chiffr|\btls\b|\bssl\b|mot de passe|vuln[ée]rabilit|\bowasp\b|pentest|jeton|token|cl[ée]s? api|secret|habilitation/i],
+  ['API et interfaces', /\bapi\b|interface|webservice|\brest\b|\bsoap\b|\bjson\b|\bxml\b|endpoint|connecteur|flux|\bedi\b|webhook|int[ée]gration/i],
+  ['Performance et SLA', /\bsla\b|disponibilit[ée]|temps de r[ée]ponse|performance|\bgti\b|\bgtr\b|taux de service|mont[ée]e en charge|scalab|\brpo\b|\brto\b/i],
+  ['Recette', /recette|\bvabf?\b|\bvsr\b|test|validation|anomalie bloquante|crit[èe]res d'acceptation|pr[ée]-?production|environnement de test/i],
+  ['Maintenance et support', /maintenance|support|correctif|[ée]volutif|hotline|ticket|incident|mise [àa] jour|mont[ée]e de version|astreinte/i],
+  ['Réversibilité', /r[ée]versibilit|portabilit|export des donn|fin de contrat|restitution|migration/i],
+  ['Licences et PI', /licence|propri[ée]t[ée] intellectuelle|code source|open ?source|\bgpl\b|\bmit\b|droits d'auteur|cession|saas/i],
+  ['Architecture', /architecture|h[ée]bergement|cloud|serveur|base de donn[ée]es|infrastructure|sauvegarde|\bpra\b|\bpca\b|redondance|microservice/i],
+  ['Planning et chiffrage', /planning|jalon|lot|livrable|jours?[- ]hommes?|\bj\/h\b|\btjm\b|chiffrage|budget|forfait|r[ée]gie|devis/i],
+  ['Exigences', /exigence|besoin|fonctionnalit|cas d'usage|user stor|sp[ée]cification|doit|devra|cahier des charges/i]
+];
+Object.assign(DOMAIN_META, {
+  'Parties et capacité': { ic: '🪪', c: '#7f9cc0' }, 'Désignation du bien': { ic: '🏠', c: '#b08a5a' }, 'Prix et financement': { ic: '💶', c: '#d1ad66' },
+  'Conditions suspensives': { ic: '⏸️', c: '#ef8a3c' }, 'Diagnostics': { ic: '🔎', c: '#3cb5ad' }, 'Servitudes et urbanisme': { ic: '🗺️', c: '#5bbf62' },
+  'Copropriété': { ic: '🏢', c: '#8b6cff' }, 'Bail': { ic: '🔑', c: '#c06ad6' }, 'Fiscalité': { ic: '🧾', c: '#d97a5a' }, 'Délais': { ic: '⏳', c: '#e2558a' },
+  "Règles d'urbanisme": { ic: '📐', c: '#5bbf62' }, 'Autorisations': { ic: '📋', c: '#8b6cff' }, 'Surfaces et métrés': { ic: '📏', c: '#d1ad66' },
+  'Structure et géotechnique': { ic: '🧱', c: '#b08a5a' }, 'Thermique et énergie': { ic: '🌡️', c: '#ef8a3c' }, 'Accessibilité-Sécurité': { ic: '♿', c: '#e5484d' },
+  'Réseaux et VRD': { ic: '🚰', c: '#3d9be0' }, 'Marchés et prix': { ic: '🧮', c: '#c06ad6' }, 'Planning': { ic: '📅', c: '#3cb5ad' },
+  'Exigences': { ic: '🎯', c: '#d1ad66' }, 'Architecture': { ic: '🏗️', c: '#7f9cc0' }, 'API et interfaces': { ic: '🔌', c: '#3d9be0' },
+  'Sécurité': { ic: '🔒', c: '#e5484d' }, 'Performance et SLA': { ic: '⚡', c: '#e2c32f' }, 'Recette': { ic: '🧪', c: '#3cb5ad' },
+  'Maintenance et support': { ic: '🧰', c: '#ef8a3c' }, 'Réversibilité': { ic: '↩️', c: '#8b6cff' }, 'Licences et PI': { ic: '💡', c: '#c06ad6' },
+  'Planning et chiffrage': { ic: '📅', c: '#b08a5a' }
+});
 const AI_RULES_COMMON = "Ne cite un article de loi, un texte ou une jurisprudence que si tu es certain de sa référence ; sinon décris la règle sans numéro.";
 const PROFILES = {
   collectivite: {
@@ -479,13 +535,68 @@ const PROFILES = {
     domains: DOMAINS_JUR, rules: DOMAIN_RULES_JUR,
     orgLabel: 'Dossier / parties', orgPh: 'Ex. Contrat AlloTools / HerculePro', dateLabel: 'Date de référence', dateWord: 'Date de référence :',
     coverSub: 'Contrôle juridique des documents', orgDefault: 'Dossier juridique'
+  },
+  notarial: {
+    label: 'Notarial et immobilier', calcDom: 'Prix et financement', textDom: 'Rédaction',
+    intro: (o, d) => `Tu es un notaire et juriste immobilier expérimenté (droit immobilier français, copropriété, baux, fiscalité immobilière). Je te joins des documents notariaux ou immobiliers à contrôler${o ? ' (dossier « ' + o + ' »)' : ''}${d ? ' (date de référence : ' + d + ')' : ''} :`,
+    missionHead: "Mission : contrôler ces documents avant signature (avant-contrat, acte, bail, état daté…) et lister les points à revoir, en particulier :",
+    missions: [
+      "- parties : état civil complet, régime matrimonial ou PACS, capacité, pouvoirs et procurations, représentation des sociétés ; concordance des identités d'un document à l'autre ;",
+      "- désignation du bien : adresse, références cadastrales (section, numéro, contenance), lots de copropriété et tantièmes, surfaces (loi Carrez, habitable), cohérence avec plans et annexes ;",
+      "- origine de propriété et situation hypothécaire si elles figurent au dossier ;",
+      "- prix et financement : montant, ventilation du mobilier, dépôt de garantie ou séquestre, honoraires et frais, plan de financement ; cohérence des montants entre documents ;",
+      "- conditions suspensives : prêt (montant, durée, taux maximal, délai d'obtention), droit de préemption, autorisations ; dates de réalisation et articulation avec la date de signature de l'acte ;",
+      "- diagnostics obligatoires : présence, cohérence et validité à la date de signature (DPE, amiante, plomb, termites, électricité, gaz, état des risques, assainissement, mesurage) ;",
+      "- servitudes, urbanisme et situation locative ; copropriété : règlement, procès-verbaux d'assemblée, charges, fonds de travaux, travaux votés et répartition entre vendeur et acquéreur ;",
+      "- délais : droit de rétractation de l'acquéreur non professionnel, réitération, entrée en jouissance ; bail : durée, loyer, indexation et indice de référence, dépôt de garantie, répartition des charges et travaux ;",
+      "- fiscalité : plus-value, droits de mutation ou TVA immobilière, frais ; incohérences de dates, de montants ou de références entre l'avant-contrat, l'acte et les annexes."],
+    domains: DOMAINS_NOT, rules: DOMAIN_RULES_NOT,
+    orgLabel: 'Dossier / bien', orgPh: 'Ex. Vente maison 12 rue des Lilas', dateLabel: 'Date de signature prévue', dateWord: 'Signature prévue le',
+    coverSub: 'Contrôle des documents notariaux et immobiliers', orgDefault: 'Dossier immobilier'
+  },
+  urbanisme: {
+    label: 'Urbanisme et technique', calcDom: 'Surfaces et métrés', textDom: 'Rédaction',
+    intro: (o, d) => `Tu es un urbaniste et ingénieur de bureau d'études expérimenté (Code de l'urbanisme, PLU/PLUi, construction et BTP, marchés de travaux). Je te joins des documents d'urbanisme ou techniques à contrôler${o ? ' (projet « ' + o + ' »)' : ''}${d ? ' (date de référence : ' + d + ')' : ''} :`,
+    missionHead: 'Mission : contrôler ces documents avant dépôt, validation ou lancement des travaux, et lister les points à revoir, en particulier :',
+    missions: [
+      "- conformité aux règles d'urbanisme mentionnées : zonage, destination, hauteur, emprise au sol, implantation par rapport aux voies et limites, stationnement, espaces verts, aspect extérieur, OAP ;",
+      "- autorisations : nature de l'autorisation adaptée au projet, pièces exigées présentes et cohérentes, délais d'instruction, affichage et recours, servitudes d'utilité publique ;",
+      "- cohérence entre pièces : notice, plans (masse, niveaux, coupes, façades), CCTP, DPGF/DQE/BPU : surfaces, cotes, niveaux NGF, quantités, désignations ;",
+      "- métrés et prix : quantités x prix unitaires, sous-totaux par lot, totaux HT/TVA/TTC, révision des prix ;",
+      "- technique : structure et géotechnique (missions G1/G2), normes et DTU cités, réglementation thermique et environnementale, ventilation, acoustique ;",
+      "- accessibilité des personnes à mobilité réduite et sécurité incendie (ERP, habitation, code du travail selon le cas) ;",
+      "- réseaux et VRD : raccordements, eaux pluviales, assainissement, défense incendie ;",
+      "- marchés de travaux : pièces contractuelles et leur ordre de priorité, pénalités, retenue de garantie, délais, phasage et planning, réception ;",
+      "- prescriptions contradictoires, lacunes techniques ou exigences non chiffrées."],
+    domains: DOMAINS_URB, rules: DOMAIN_RULES_URB,
+    orgLabel: 'Projet / opération', orgPh: 'Ex. Extension école - lot gros œuvre', dateLabel: 'Date de référence', dateWord: 'Date de référence :',
+    coverSub: "Contrôle des documents d'urbanisme et techniques", orgDefault: 'Projet'
+  },
+  informatique: {
+    label: 'Informatique', calcDom: 'Planning et chiffrage', textDom: 'Rédaction',
+    intro: (o, d) => `Tu es un architecte des systèmes d'information et consultant en contrats informatiques expérimenté (cahiers des charges, spécifications, contrats SaaS et d'intégration, sécurité, RGPD). Je te joins des documents informatiques à contrôler${o ? ' (projet « ' + o + ' »)' : ''}${d ? ' (date de référence : ' + d + ')' : ''} :`,
+    missionHead: 'Mission : contrôler ces documents avant validation ou signature, et lister les points à revoir, en particulier :',
+    missions: [
+      "- exigences : chacune doit être claire, non ambiguë, testable et non contradictoire ; repère les termes vagues (« rapide », « intuitif », « si possible »), les doublons et les exigences orphelines ;",
+      "- architecture et hébergement : composants, environnements, sauvegardes, plan de reprise et de continuité (RPO, RTO), réversibilité ;",
+      "- API et interfaces : formats, versions, authentification, gestion des erreurs, volumétrie, responsabilités de chaque partie dans les flux ;",
+      "- sécurité : authentification, gestion des droits, chiffrement, gestion des secrets et clés d'API, journalisation, tests d'intrusion, gestion des vulnérabilités ;",
+      "- données personnelles : rôles des parties, clauses de sous-traitance, localisation de l'hébergement, transferts hors UE, durées de conservation ;",
+      "- engagements de service : disponibilité, temps de réponse, délais de prise en charge et de rétablissement (GTI/GTR), pénalités, mesure et reporting ;",
+      "- recette : critères d'acceptation, environnements, classification des anomalies, procédure et délais de validation ;",
+      "- maintenance, support et évolutions ; propriété du code, licences et composants open source ;",
+      "- planning et chiffrage : jalons et dépendances, charges (jours-homme x TJM), totaux, cohérence entre planning, lots et budget."],
+    domains: DOMAINS_IT, rules: DOMAIN_RULES_IT,
+    orgLabel: 'Projet / application', orgPh: 'Ex. Connecteur MyConfigurator / HP Link', dateLabel: 'Date de référence', dateWord: 'Date de référence :',
+    coverSub: 'Contrôle des documents informatiques', orgDefault: 'Projet informatique'
   }
 };
 let MODE = 'collectivite', DOMAINS = DOMAINS_COLL, DOMAIN_RULES = DOMAIN_RULES_COLL;
 function setMode(m) { MODE = PROFILES[m] ? m : 'collectivite'; DOMAINS = PROFILES[MODE].domains; DOMAIN_RULES = PROFILES[MODE].rules; }
 
 function classifyDomain(f, docName = '') {
-  const txt = [f.title, f.detail, ...(f.refs || []).map(r => r.extract + ' ' + r.doc), docName].join(' ');
+  // points automatiques : on ne classe que sur les passages cités (le texte d'explication généré fausserait le thème)
+  const txt = [...(f.cat === 'ia' ? [f.title, f.detail] : []), ...(f.refs || []).map(r => r.extract + ' ' + r.doc), docName].join(' ');
   for (const [d, re] of DOMAIN_RULES) if (re.test(txt)) return d;
   const P = PROFILES[MODE];
   if (['calc', 'evol', 'arith', 'sens', 'incoh'].includes(f.cat)) return P.calcDom;
