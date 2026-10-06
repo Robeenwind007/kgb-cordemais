@@ -295,8 +295,9 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.13.1', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.14.0', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.14.0', d: '06/10/2026', items: ['PDF : présentation sobre sur fond blanc (titres serif, filets or et bordeaux), sans logo ni bandeau sombre'] },
   { v: '1.13.1', d: '06/10/2026', items: ['Gemini retiré ; 4e choix « Copier le prompt » pour utiliser n\'importe quelle autre IA'] },
   { v: '1.13.0', d: '06/10/2026', items: ['Bouton « Résumer seulement dans un mémo » : prompt de synthèse adapté au type de documents, mémo PDF d\'une à deux pages'] },
   { v: '1.12.0', d: '06/10/2026', items: ['Trois nouveaux types : notarial et immobilier, urbanisme et technique, informatique', 'Prompts IA spécialisés (notaire, urbaniste / bureau d\'études, architecte SI) et thèmes dédiés'] },
@@ -1317,6 +1318,17 @@ $('#pdfBtn').onclick = async () => {
   try { await exportPdf(); } catch (e) { console.error(e); alert('Erreur lors de la création du PDF : ' + e.message); }
   pdfBtn.disabled = false; pdfBtn.innerHTML = pdfLbl;
 };
+/* Charte des documents PDF : fond blanc, bordeaux + or, titres en serif */
+const PDFC = { ink: [30, 28, 28], gray: [110, 106, 104], light: [150, 146, 144], bord: [122, 18, 24], gold: [168, 132, 63], hair: [214, 204, 190] };
+function pdfHeader(doc, W, M, title, metaLeft, metaRight) {
+  doc.setTextColor(...PDFC.bord); doc.setFont('times', 'bold'); doc.setFontSize(17);
+  doc.text(pdfSafe(title), M, 17);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...PDFC.gray);
+  if (metaLeft) doc.text(pdfSafe(metaLeft), M, 23);
+  if (metaRight) doc.text(pdfSafe(metaRight), W - M, 23, { align: 'right' });
+  doc.setDrawColor(...PDFC.gold); doc.setLineWidth(0.5); doc.line(M, 26.5, W - M, 26.5);
+  doc.setDrawColor(...PDFC.hair); doc.setLineWidth(0.2); doc.line(M, 27.6, W - M, 27.6);
+}
 async function exportPdf() {
   if (!window.jspdf) { alert("Le module d'export PDF n'est pas disponible hors ligne tant que l'application n'a pas été ouverte une fois en ligne."); return; }
   const { jsPDF } = window.jspdf;
@@ -1331,76 +1343,68 @@ async function exportPdf() {
   const SYN = 2; // page de la synthèse
   const coverDocs = [], sepPages = {};
 
-  /* ===== Page de garde ===== */
-  doc.setFillColor(20, 16, 18); doc.rect(0, 0, W, PH0, 'F');
-  doc.setFillColor(74, 11, 16); doc.rect(0, 0, W, 132, 'F');
-  doc.setFillColor(142, 15, 22); doc.rect(0, 132, W, 1.6, 'F');
-  doc.setDrawColor(209, 173, 102); doc.setLineWidth(0.3); doc.rect(7, 7, W - 14, PH0 - 14);
-  doc.setTextColor(209, 173, 102); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
-  doc.text('K G B   D O C', M + 2, 17);
-  doc.setFont('helvetica', 'normal'); doc.setTextColor(200, 185, 178);
-  doc.text(pdfSafe(now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })), W - M - 2, 17, { align: 'right' });
-  try {
-    const lw = 76, lh = lw * 1402 / 1122, lx = (W - lw) / 2, ly = 24;
-    doc.setFillColor(12, 9, 10); doc.roundedRect(lx - 2.4, ly - 2.4, lw + 4.8, lh + 4.8, 2.5, 2.5, 'F');
-    doc.setDrawColor(209, 173, 102); doc.setLineWidth(0.8); doc.roundedRect(lx - 1.6, ly - 1.6, lw + 3.2, lh + 3.2, 2, 2, 'S');
-    doc.addImage(logo, 'JPEG', lx, ly, lw, lh);
-  } catch (e) { }
-  let cy = 150;
-  doc.setTextColor(209, 173, 102); doc.setFont('helvetica', 'bold'); doc.setFontSize(30);
-  doc.text("RAPPORT D'ANALYSE", W / 2, cy, { align: 'center' }); cy += 9;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(12); doc.setTextColor(200, 185, 178);
-  doc.text(pdfSafe(PROFILES[MODE].coverSub), W / 2, cy, { align: 'center' }); cy += 14;
-  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(17);
-  doc.text(pdfSafe(coll || PROFILES[MODE].orgDefault), W / 2, cy, { align: 'center' }); cy += 7.5;
-  if (seanceTxt) { doc.setFont('helvetica', 'normal'); doc.setFontSize(12); doc.setTextColor(230, 220, 214); doc.text(pdfSafe(PROFILES[MODE].dateWord + ' ' + seanceTxt), W / 2, cy, { align: 'center' }); cy += 6; }
-  cy += 6;
-  // chiffres clés
+  /* ===== Page de garde (sobre, fond blanc) ===== */
+  const X0 = 30;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...PDFC.bord);
+  doc.text('KGB DOC', X0, 22, { charSpace: 1.6 });
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(...PDFC.gray);
+  doc.text(pdfSafe(now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })), W - X0, 22, { align: 'right' });
+  doc.setDrawColor(...PDFC.gold); doc.setLineWidth(0.5); doc.line(X0, 26, W - X0, 26);
+  doc.setDrawColor(...PDFC.hair); doc.setLineWidth(0.2); doc.line(X0, 27.2, W - X0, 27.2);
+  let cy = 92;
+  doc.setFillColor(...PDFC.bord); doc.rect(X0 - 9, cy - 10, 1.4, 52, 'F');
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...PDFC.gray);
+  doc.text(pdfSafe(PROFILES[MODE].coverSub.toUpperCase()), X0, cy - 4, { charSpace: 0.8 });
+  doc.setFont('times', 'bold'); doc.setFontSize(36); doc.setTextColor(...PDFC.bord);
+  doc.text("Rapport d'analyse", X0, cy + 10); cy += 22;
+  doc.setDrawColor(...PDFC.gold); doc.setLineWidth(0.6); doc.line(X0, cy - 4, X0 + 34, cy - 4);
+  doc.setFont('times', 'normal'); doc.setFontSize(19); doc.setTextColor(...PDFC.ink);
+  doc.text(doc.splitTextToSize(pdfSafe(coll || PROFILES[MODE].orgDefault), W - 2 * X0)[0], X0, cy + 6); cy += 13;
+  if (seanceTxt) { doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(...PDFC.gray); doc.text(pdfSafe(PROFILES[MODE].dateWord + ' ' + seanceTxt), X0, cy); }
+  cy = 168;
+  // chiffres clés, séparés par de fins filets
   const nThemes = new Set(sel.map(f => f.dom)).size;
-  const kpis = [[String(sel.length), 'points à revoir', [241, 233, 228]], [String(sel.filter(f => f.sev === 'haute').length), 'prioritaires', [229, 72, 77]], [String(nThemes), 'thèmes concernés', [209, 173, 102]]];
-  const kw = 46, kg = 6, kx0 = (W - (3 * kw + 2 * kg)) / 2;
+  const kpis = [[String(sel.length), 'points à revoir', PDFC.ink], [String(sel.filter(f => f.sev === 'haute').length), 'prioritaires', PDFC.bord], [String(nThemes), 'thèmes concernés', PDFC.gold]];
+  const kw = (W - 2 * X0) / 3;
   kpis.forEach(([v, l, c], i) => {
-    const x = kx0 + i * (kw + kg);
-    doc.setDrawColor(90, 70, 72); doc.setFillColor(34, 26, 28); doc.setLineWidth(0.3); doc.roundedRect(x, cy, kw, 20, 2, 2, 'FD');
-    doc.setTextColor(...c); doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.text(v, x + kw / 2, cy + 10, { align: 'center' });
-    doc.setTextColor(185, 170, 164); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.text(l, x + kw / 2, cy + 16, { align: 'center' });
+    const x = X0 + i * kw;
+    if (i) { doc.setDrawColor(...PDFC.hair); doc.setLineWidth(0.3); doc.line(x, cy - 9, x, cy + 8); }
+    doc.setTextColor(...c); doc.setFont('times', 'bold'); doc.setFontSize(28); doc.text(v, x + (i ? 8 : 0), cy + 1);
+    doc.setTextColor(...PDFC.gray); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.text(l, x + (i ? 8 : 0), cy + 7);
   });
-  cy += 30;
-  // documents de référence
-  doc.setTextColor(209, 173, 102); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
-  doc.text('DOCUMENTS ANALYSÉS' + ($('#attachChk').checked ? ' (joints en fin de rapport)' : ''), M + 6, cy);
-  doc.setDrawColor(209, 173, 102); doc.setLineWidth(0.3); doc.line(M + 6, cy + 2, W - M - 6, cy + 2); cy += 7;
+  cy += 26;
+  // documents analysés
+  doc.setTextColor(...PDFC.bord); doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
+  doc.text(pdfSafe('DOCUMENTS ANALYSÉS'), X0, cy, { charSpace: 0.6 });
+  if ($('#attachChk').checked) { doc.setFont('helvetica', 'italic'); doc.setTextColor(...PDFC.light); doc.text('joints en fin de rapport', W - X0, cy, { align: 'right' }); }
+  doc.setDrawColor(...PDFC.hair); doc.setLineWidth(0.3); doc.line(X0, cy + 2.2, W - X0, cy + 2.2); cy += 8;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
   const maxDocs = 7;
   state.docs.slice(0, maxDocs).forEach((d, di) => {
     const lbl = pdfSafe(`${di + 1}.  ${d.name}`), meta = `${d.numPages || 0} p.`;
-    doc.setTextColor(241, 233, 228); doc.text(doc.splitTextToSize(lbl, W - 2 * M - 40)[0], M + 6, cy);
-    doc.setTextColor(150, 140, 136); doc.text(meta, W - M - 6, cy, { align: 'right' });
-    coverDocs.push({ di, x: M + 5, y: cy - 4.2, w: W - 2 * M - 10, h: 6 });
-    cy += 6.2;
+    doc.setTextColor(...PDFC.ink); doc.text(doc.splitTextToSize(lbl, W - 2 * X0 - 20)[0], X0, cy);
+    doc.setTextColor(...PDFC.light); doc.text(meta, W - X0, cy, { align: 'right' });
+    coverDocs.push({ di, x: X0 - 1, y: cy - 4.2, w: W - 2 * X0 + 2, h: 6 });
+    cy += 6.4;
   });
-  if (state.docs.length > maxDocs) { doc.setTextColor(150, 140, 136); doc.text(`+ ${state.docs.length - maxDocs} autre(s) document(s)`, M + 6, cy); cy += 6; }
+  if (state.docs.length > maxDocs) { doc.setTextColor(...PDFC.light); doc.text(`+ ${state.docs.length - maxDocs} autre(s) document(s)`, X0, cy); }
   // pied de page de garde
-  doc.setTextColor(185, 170, 164); doc.setFontSize(9);
-  doc.text(pdfSafe(`Établi${author ? ' par ' + author : ''} le ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`), W / 2, PH0 - 30, { align: 'center' });
-  doc.setFontSize(8); doc.setTextColor(130, 120, 116);
-  doc.text('Document de travail - analyse automatique et assistée, à vérifier par le lecteur', W / 2, PH0 - 24, { align: 'center' });
-  doc.setTextColor(209, 173, 102);
-  doc.text(pdfSafe(`KGB Doc v${APP.version} - © Olivier BERNARD 2026`), W / 2, PH0 - 16, { align: 'center' });
+  doc.setDrawColor(...PDFC.gold); doc.setLineWidth(0.4); doc.line(X0, PH0 - 36, W - X0, PH0 - 36);
+  doc.setTextColor(...PDFC.gray); doc.setFontSize(9);
+  doc.text(pdfSafe(`Établi${author ? ' par ' + author : ''} le ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`), X0, PH0 - 29);
+  doc.setFontSize(8); doc.setTextColor(...PDFC.light);
+  doc.text('Document de travail - analyse automatique et assistée, à vérifier par le lecteur', X0, PH0 - 24);
+  doc.text(pdfSafe(`KGB Doc v${APP.version} - © Olivier BERNARD 2026`), W - X0, PH0 - 29, { align: 'right' });
   doc.outline.add(null, 'Page de garde', { pageNumber: 1 });
 
   /* ===== Synthèse ===== */
   doc.addPage('a4', 'p');
-  doc.setFillColor(20, 16, 18); doc.rect(0, 0, W, 34, 'F');
-  try { doc.addImage(document.querySelector('#splash img').src, 'JPEG', M, 4, 20.8, 26); } catch (e) { }
-  doc.setTextColor(209, 173, 102); doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
-  doc.text("RAPPORT D'ANALYSE", M + 24, 14);
-  doc.setTextColor(241, 233, 228); doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-  doc.text(pdfSafe([coll || PROFILES[MODE].orgDefault, seance ? PROFILES[MODE].dateWord + ' ' + new Date(seance).toLocaleDateString('fr-FR') : ''].filter(Boolean).join(' - ')), M + 24, 21);
-  doc.text(pdfSafe(`Généré le ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${author ? ' par ' + author : ''}`), M + 24, 27);
+  pdfHeader(doc, W, M, "Rapport d'analyse",
+    [coll || PROFILES[MODE].orgDefault, seance ? PROFILES[MODE].dateWord + ' ' + new Date(seance).toLocaleDateString('fr-FR') : ''].filter(Boolean).join(' - '),
+    `Généré le ${now.toLocaleDateString('fr-FR')}${author ? ' par ' + author : ''}`);
 
-  let y = 44;
-  doc.setTextColor(30, 30, 30); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('Synthèse', M, y);
+  let y = 38;
+  doc.setTextColor(...PDFC.ink); doc.setFont('times', 'bold'); doc.setFontSize(14); doc.text('Synthèse', M, y);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(10); y += 6;
   const cnt = s => sel.filter(f => f.sev === s).length;
   const intro = sel.length
@@ -1422,7 +1426,7 @@ async function exportPdf() {
   const sumTop = 38;
   doc.outline.add(null, 'Synthèse', { pageNumber: SYN });
   if (used.length) {
-    doc.setTextColor(30, 30, 30); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('Répartition par thème', M, y);
+    doc.setTextColor(...PDFC.ink); doc.setFont('times', 'bold'); doc.setFontSize(13); doc.text('Répartition par thème', M, y);
     doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(130, 130, 130);
     doc.text('Cliquez sur un thème pour aller directement à sa section', W - M, y, { align: 'right' }); y += 4;
     const tw = 41, th = 17, gap = 4.3, perRow = 4;
@@ -1450,18 +1454,19 @@ async function exportPdf() {
       const items = sel.filter(f => f.dom === d), col = hex(DOMAIN_META[d].c);
       if (y > PH - 55) { doc.addPage(); y = 18; }
       // bandeau de section (= ancre)
-      doc.setFillColor(...col); doc.roundedRect(M, y, W - 2 * M, 10, 1.5, 1.5, 'F');
-      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11.5);
-      doc.text(pdfSafe(d.toUpperCase()), M + 4, y + 6.8);
-      const tlen = doc.getTextWidth(pdfSafe(d.toUpperCase()));
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+      doc.setFillColor(...col); doc.rect(M, y + 1, 1.4, 8, 'F');
+      doc.setTextColor(...col.map(v => Math.round(v * 0.7))); doc.setFont('times', 'bold'); doc.setFontSize(14);
+      doc.text(pdfSafe(d), M + 4.5, y + 7);
+      const tlen = doc.getTextWidth(pdfSafe(d));
+      doc.setDrawColor(...PDFC.hair); doc.setLineWidth(0.25); doc.line(M, y + 10.5, W - M, y + 10.5);
+      doc.setTextColor(...PDFC.gray); doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
       const hi = items.filter(f => f.sev === 'haute').length;
-      doc.text(`${items.length} point${items.length > 1 ? 's' : ''}${hi ? ' - ' + hi + ' prioritaire' + (hi > 1 ? 's' : '') : ''}`, M + 7 + tlen, y + 6.8);
-      doc.setFontSize(8); doc.text('^ Retour à la synthèse', W - M - 3, y + 6.6, { align: 'right' });
+      doc.text(`${items.length} point${items.length > 1 ? 's' : ''}${hi ? ' - ' + hi + ' prioritaire' + (hi > 1 ? 's' : '') : ''}`, M + 8 + tlen, y + 7);
+      doc.setFontSize(8); doc.setTextColor(...PDFC.light); doc.text('^ Retour à la synthèse', W - M, y + 7, { align: 'right' });
       doc.link(W - M - 40, y, 40, 10, { pageNumber: SYN, top: sumTop });
       anchors[d] = { page: curPage(), top: Math.max(0, y - 4) };
       doc.outline.add(null, `${d} (${items.length})`, { pageNumber: curPage() });
-      y += 12;
+      y += 13;
       doc.autoTable({
         startY: y, margin: { left: M, right: M, bottom: 18 },
         head: [['N°', 'Point à revoir', 'Référence', 'Priorité']],
@@ -1521,15 +1526,18 @@ async function exportPdf() {
   if (attach) state.docs.forEach((d, di) => {
     if (!d.bytes || !d.pages.length) return;
     doc.addPage('a4', 'p'); const sp = curPage(); sepPages[di] = sp;
-    doc.setFillColor(20, 16, 18); doc.rect(0, 0, W, PH, 'F');
-    doc.setTextColor(209, 173, 102); doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
-    doc.text("DOCUMENT D'ORIGINE " + (di + 1) + ' / ' + state.docs.length, M, 110);
-    doc.setTextColor(241, 233, 228); doc.setFontSize(18);
-    doc.text(doc.splitTextToSize(pdfSafe(d.name), W - 2 * M), M, 122);
+    doc.setDrawColor(...PDFC.gold); doc.setLineWidth(0.5); doc.line(30, 98, W - 30, 98);
+    doc.setTextColor(...PDFC.bord); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+    doc.text("DOCUMENT D'ORIGINE  " + (di + 1) + ' / ' + state.docs.length, 30, 110, { charSpace: 1 });
+    doc.setTextColor(...PDFC.ink); doc.setFont('times', 'bold'); doc.setFontSize(20);
+    const nl = doc.splitTextToSize(pdfSafe(d.name), W - 60); doc.text(nl, 30, 122);
+    const ny = 122 + nl.length * 8;
     const nb = sel.filter(f => f.refs.some(r => resolveRef(r)?.di === di)).length;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(185, 170, 164);
-    doc.text(pdfSafe(`${d.numPages} page(s) - ${nb} remarque(s) renvoient à ce document`), M, 140);
-    doc.text(pdfSafe('Les passages cités sont surlignés en jaune et numérotés. Cliquez sur un surlignage pour revenir à la remarque.'), M, 148, { maxWidth: W - 2 * M });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...PDFC.gray);
+    doc.text(pdfSafe(`${d.numPages} page(s) - ${nb} remarque(s) renvoient à ce document`), 30, ny + 4);
+    doc.setFontSize(9); doc.setTextColor(...PDFC.light);
+    doc.text(pdfSafe('Les passages cités sont surlignés en jaune et numérotés. Cliquez sur un surlignage pour revenir à la remarque.'), 30, ny + 11, { maxWidth: W - 60 });
+    doc.setDrawColor(...PDFC.hair); doc.setLineWidth(0.2); doc.line(30, ny + 20, W - 30, ny + 20);
     doc.outline.add(null, 'Document : ' + d.name, { pageNumber: sp });
     d.pages.forEach((p, pi) => {
       const wmm = p.w * 25.4 / 72, hmm = p.h * 25.4 / 72;
@@ -1683,26 +1691,21 @@ $('#memoPdfBtn').onclick = async () => {
   const W = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight(), M = 18;
   const P = PROFILES[MODE], coll = $('#fColl').value.trim(), seance = $('#fDate').value, author = $('#fAuthor').value.trim();
   const now = new Date(), logo = document.querySelector('#splash img').src;
-  // en-tête
-  doc.setFillColor(20, 16, 18); doc.rect(0, 0, W, 30, 'F');
-  doc.setFillColor(142, 15, 22); doc.rect(0, 30, W, 1.2, 'F');
-  try { doc.addImage(logo, 'JPEG', M - 4, 3.5, 18.4, 23); } catch (e) { }
-  doc.setTextColor(209, 173, 102); doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.text('MÉMO', M + 18, 13);
-  doc.setTextColor(241, 233, 228); doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-  doc.text(pdfSafe([coll || P.orgDefault, seance ? P.dateWord + ' ' + new Date(seance).toLocaleDateString('fr-FR') : ''].filter(Boolean).join(' - ')), M + 18, 20);
-  doc.setFontSize(8.5); doc.setTextColor(185, 170, 164);
-  doc.text(pdfSafe(`${P.label} - établi le ${now.toLocaleDateString('fr-FR')}${author ? ' par ' + author : ''}`), M + 18, 25.5);
-  let y = 40;
+  // en-tête sobre
+  pdfHeader(doc, W, M, 'Mémo',
+    [coll || P.orgDefault, seance ? P.dateWord + ' ' + new Date(seance).toLocaleDateString('fr-FR') : ''].filter(Boolean).join(' - '),
+    `${P.label} - ${now.toLocaleDateString('fr-FR')}${author ? ' - ' + author : ''}`);
+  let y = 36;
   const ensure = h => { if (y + h > PH - 18) { doc.addPage(); y = 18; } };
   // documents
   doc.setTextColor(110, 110, 110); doc.setFontSize(8.5);
   const dl = doc.splitTextToSize(pdfSafe('Documents : ' + state.docs.map(d => `${d.name} (${d.numPages || 0} p.)`).join(' ; ')), W - 2 * M);
   doc.text(dl, M, y); y += dl.length * 3.8 + 5;
-  const H = s => { ensure(12); y += 2; doc.setFillColor(142, 15, 22); doc.rect(M, y - 4, 1.4, 5.5, 'F'); doc.setTextColor(30, 30, 30); doc.setFont('helvetica', 'bold'); doc.setFontSize(11.5); doc.text(pdfSafe(s), M + 4, y); y += 6.5; };
+  const H = s => { ensure(12); y += 2.5; doc.setTextColor(...PDFC.bord); doc.setFont('times', 'bold'); doc.setFontSize(13); doc.text(pdfSafe(s), M, y); doc.setDrawColor(...PDFC.hair); doc.setLineWidth(0.25); doc.line(M, y + 1.8, W - M, y + 1.8); y += 7.5; };
   const T = (s, bullet) => {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(40, 40, 40);
     const x = bullet ? M + 7 : M + 4, lines = doc.splitTextToSize(pdfSafe(s), W - x - M);
-    lines.forEach((ln, i) => { ensure(5); if (bullet && i === 0) { doc.setFillColor(209, 173, 102); doc.circle(M + 4.6, y - 1.2, 0.8, 'F'); } doc.text(ln, x, y); y += 4.8; });
+    lines.forEach((ln, i) => { ensure(5); if (bullet && i === 0) { doc.setFillColor(...PDFC.gold); doc.circle(M + 4.6, y - 1.2, 0.75, 'F'); } doc.text(ln, x, y); y += 4.8; });
     y += bullet ? 0.6 : 2;
   };
   const blocks = mdToBlocks($('#memoAnswer').value);
