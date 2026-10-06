@@ -10,8 +10,10 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="KGB Doc">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -219,8 +221,9 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.3.1', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.3.2', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.3.2', d: '06/10/2026', items: ['Favicon (ICO + PNG) et icône Apple dédiée'] },
   { v: '1.3.1', d: '06/10/2026', items: ['Nouvel insigne « KGB — Kordemais, Gardiens du Budget » (splash, en-tête, icônes, PDF)'] },
   { v: '1.3.0', d: '06/10/2026', items: [
     'Classement de chaque point par domaine (Juridique, Financier, Comptable, RH, CCAS, Urbanisme, Culture…), modifiable à la main',
