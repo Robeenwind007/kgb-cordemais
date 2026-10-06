@@ -211,7 +211,10 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
           <label class="toggle"><input type="checkbox" id="autoChk" checked> Rapport automatique dès l'ajout des documents</label>
           <label class="toggle"><input type="checkbox" id="attachChk" checked> Joindre les documents d'origine au PDF (liens vers les passages surlignés)</label>
         </div>
-        <button class="btn primary" id="genBtn" disabled>⚙ Générer le rapport</button>
+        <div class="row">
+          <button class="btn" id="memoBtn" disabled title="Un mémo court qui résume le contenu des documents, sans rapport d'analyse détaillé">📝 Résumer seulement dans un mémo</button>
+          <button class="btn primary" id="genBtn" disabled>⚙ Générer le rapport</button>
+        </div>
       </div>
     </section>
 
@@ -237,6 +240,31 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
   <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn sm" onclick="this.closest('dialog').close()">Fermer</button></div>
 </dialog>
 
+<dialog id="memoDlg" class="wide">
+  <h3>Mémo de synthèse</h3>
+  <ol>
+    <li>Ouvrez l'IA de votre choix : le prompt « mémo » est copié (et prérempli sauf pour Gemini).</li>
+    <li><b>Joignez les PDF</b> puis envoyez.</li>
+    <li>Collez la réponse ci-dessous et générez le mémo PDF (1 à 2 pages).</li>
+  </ol>
+  <textarea id="memoPrompt" rows="6" readonly></textarea>
+  <div class="ai-grid" style="margin:10px 0 8px">
+    <button class="ai-btn open-ai" data-src="memoPrompt" data-ai="Claude"><span class="ai-logo" data-id="claude" data-ini="C"></span><span>Claude</span></button>
+    <button class="ai-btn open-ai" data-src="memoPrompt" data-ai="ChatGPT"><span class="ai-logo" data-id="chatgpt" data-ini="G"></span><span>ChatGPT</span></button>
+    <button class="ai-btn open-ai" data-src="memoPrompt" data-ai="Gemini"><span class="ai-logo" data-id="gemini" data-ini="G"></span><span>Gemini</span></button>
+    <button class="ai-btn open-ai" data-src="memoPrompt" data-ai="Grok"><span class="ai-logo" data-id="grok" data-ini="X"></span><span>Grok</span></button>
+  </div>
+  <label class="f" style="margin-top:8px">Réponse de l'IA (le mémo)
+    <textarea id="memoAnswer" rows="7" placeholder="Collez ici le mémo rédigé par l'IA…"></textarea>
+  </label>
+  <label class="toggle" style="margin-top:8px"><input type="checkbox" id="memoPts" checked> Ajouter les points prioritaires détectés par l'analyse automatique</label>
+  <p class="muted" style="margin:6px 0 0">Sans réponse d'IA, le mémo reprend uniquement le contexte et les points détectés automatiquement.</p>
+  <div class="row" style="justify-content:flex-end;margin-top:12px">
+    <button class="btn sm" onclick="this.closest('dialog').close()">Fermer</button>
+    <button class="btn brass sm" id="memoPdfBtn">⬇ Générer le mémo PDF</button>
+  </div>
+</dialog>
+
 <dialog id="claudeDlg" class="wide">
   <h3>Approfondir avec une IA</h3>
   <ol>
@@ -246,10 +274,10 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
   </ol>
   <textarea id="promptTxt" rows="7" readonly></textarea>
   <div class="ai-grid" style="margin:10px 0 8px">
-    <button class="ai-btn open-ai" data-ai="Claude"><span class="ai-logo" data-id="claude" data-ini="C"></span><span>Claude</span></button>
-    <button class="ai-btn open-ai" data-ai="ChatGPT"><span class="ai-logo" data-id="chatgpt" data-ini="G"></span><span>ChatGPT</span></button>
-    <button class="ai-btn open-ai" data-ai="Gemini"><span class="ai-logo" data-id="gemini" data-ini="G"></span><span>Gemini</span></button>
-    <button class="ai-btn open-ai" data-ai="Grok"><span class="ai-logo" data-id="grok" data-ini="X"></span><span>Grok</span></button>
+    <button class="ai-btn open-ai" data-src="promptTxt" data-ai="Claude"><span class="ai-logo" data-id="claude" data-ini="C"></span><span>Claude</span></button>
+    <button class="ai-btn open-ai" data-src="promptTxt" data-ai="ChatGPT"><span class="ai-logo" data-id="chatgpt" data-ini="G"></span><span>ChatGPT</span></button>
+    <button class="ai-btn open-ai" data-src="promptTxt" data-ai="Gemini"><span class="ai-logo" data-id="gemini" data-ini="G"></span><span>Gemini</span></button>
+    <button class="ai-btn open-ai" data-src="promptTxt" data-ai="Grok"><span class="ai-logo" data-id="grok" data-ini="X"></span><span>Grok</span></button>
   </div>
   <div class="row" style="margin:0 0 16px"><button class="btn sm" id="copyPromptBtn">📋 Copier le prompt seul</button></div>
   <label class="f">Réponse de
@@ -267,8 +295,9 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.12.0', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.13.0', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.13.0', d: '06/10/2026', items: ['Bouton « Résumer seulement dans un mémo » : prompt de synthèse adapté au type de documents, mémo PDF d\'une à deux pages'] },
   { v: '1.12.0', d: '06/10/2026', items: ['Trois nouveaux types : notarial et immobilier, urbanisme et technique, informatique', 'Prompts IA spécialisés (notaire, urbaniste / bureau d\'études, architecte SI) et thèmes dédiés'] },
   { v: '1.11.0', d: '06/10/2026', items: ['Trois nouveaux types de documents : financiers, RH, juridiques', 'Prompts IA spécialisés (expert-comptable, droit social, avocat d\'affaires) et thèmes dédiés à chaque type', 'Champ « recommandation » repris de la réponse de l\'IA'] },
   { v: '1.10.3', d: '06/10/2026', items: ['Pagination de section (annexe numérotée 1/4, 2/4… à part du document) reconnue comme en-tête/pied de page'] },
@@ -457,7 +486,7 @@ Object.assign(DOMAIN_META, {
 const AI_RULES_COMMON = "Ne cite un article de loi, un texte ou une jurisprudence que si tu es certain de sa référence ; sinon décris la règle sans numéro.";
 const PROFILES = {
   collectivite: {
-    label: 'Municipaux / intercommunaux', calcDom: 'Financier', textDom: 'Gestion',
+    label: 'Municipaux / intercommunaux', memoFocus: "pour chaque point à l'ordre du jour ou délibération : objet, montants en jeu, décision proposée, impact budgétaire ; puis les grands équilibres budgétaires s'il y a un budget", calcDom: 'Financier', textDom: 'Gestion',
     intro: (o, d) => `Tu es un analyste expérimenté en finances publiques locales (CGCT, nomenclatures M57/M14). Je te joins les documents préparatoires ${o ? 'au conseil de « ' + o + ' »' : 'à un conseil municipal ou communautaire'}${d ? ' (séance du ' + d + ')' : ''} :`,
     missionHead: 'Mission : relire ces documents et lister les points à revoir avant la séance, en particulier :',
     missions: [
@@ -472,7 +501,7 @@ const PROFILES = {
     coverSub: 'Contrôle des documents préparatoires au conseil', orgDefault: 'Documents du conseil'
   },
   general: {
-    label: 'Documents généraux', calcDom: 'Financier', textDom: 'Rédaction',
+    label: 'Documents généraux', memoFocus: "objet de chaque document, parties concernées, engagements principaux, montants et échéances", calcDom: 'Financier', textDom: 'Rédaction',
     intro: (o, d) => `Tu es un auditeur documentaire rigoureux (contrôle de gestion, droit des contrats, qualité rédactionnelle). Je te joins des documents à relire${o ? ' pour le dossier « ' + o + ' »' : ''}${d ? ' (date de référence : ' + d + ')' : ''} :`,
     missionHead: 'Mission : relire ces documents et lister les points à revoir avant leur validation ou leur signature, en particulier :',
     missions: [
@@ -487,7 +516,7 @@ const PROFILES = {
     coverSub: 'Contrôle de cohérence documentaire', orgDefault: 'Dossier documentaire'
   },
   financier: {
-    label: 'Documents financiers', calcDom: 'Comptable', textDom: 'Gestion',
+    label: 'Documents financiers', memoFocus: "situation financière, chiffres clés (avec comparatif N/N-1 ou budget/réalisé), évolution des principaux indicateurs, besoins de financement", calcDom: 'Comptable', textDom: 'Gestion',
     intro: (o, d) => `Tu es un expert-comptable et analyste financier expérimenté (Plan comptable général français, analyse financière, fiscalité des entreprises, contrôle de gestion). Je te joins des documents financiers à contrôler${o ? ' concernant « ' + o + ' »' : ''}${d ? ' (date d\'arrêté ou de référence : ' + d + ')' : ''} :`,
     missionHead: 'Mission : contrôler ces documents comme le ferait un réviseur avant validation ou présentation, en particulier :',
     missions: [
@@ -503,7 +532,7 @@ const PROFILES = {
     coverSub: 'Contrôle des documents financiers', orgDefault: 'Dossier financier'
   },
   rh: {
-    label: 'Documents RH', calcDom: 'Rémunération', textDom: 'Gestion',
+    label: 'Documents RH', memoFocus: "objet, personnes ou postes concernés, conditions essentielles (rémunération, durée, temps de travail, lieu), échéances", calcDom: 'Rémunération', textDom: 'Gestion',
     intro: (o, d) => `Tu es un juriste en droit social et responsable RH expérimenté (Code du travail français, conventions collectives, paie). Je te joins des documents RH à contrôler${o ? ' pour « ' + o + ' »' : ''}${d ? ' (date de référence : ' + d + ')' : ''} :`,
     missionHead: 'Mission : contrôler ces documents avant signature, diffusion ou application, en particulier :',
     missions: [
@@ -520,7 +549,7 @@ const PROFILES = {
     coverSub: 'Contrôle des documents RH', orgDefault: 'Dossier RH'
   },
   juridique: {
-    label: 'Documents juridiques', calcDom: 'Obligations', textDom: 'Rédaction',
+    label: 'Documents juridiques', memoFocus: "parties, objet, durée, prix ou contrepartie, obligations principales de chaque partie, clauses structurantes (responsabilité, résiliation, propriété intellectuelle, exclusivité)", calcDom: 'Obligations', textDom: 'Rédaction',
     intro: (o, d) => `Tu es un avocat d'affaires expérimenté (droit français des contrats issu de la réforme de 2016, droit commercial, propriété intellectuelle, RGPD). Je te joins des documents juridiques à auditer${o ? ' (dossier « ' + o + ' »)' : ''}${d ? ' (date de référence : ' + d + ')' : ''} :`,
     missionHead: 'Mission : auditer ces documents avant signature et lister les points à revoir, en particulier :',
     missions: [
@@ -537,7 +566,7 @@ const PROFILES = {
     coverSub: 'Contrôle juridique des documents', orgDefault: 'Dossier juridique'
   },
   notarial: {
-    label: 'Notarial et immobilier', calcDom: 'Prix et financement', textDom: 'Rédaction',
+    label: 'Notarial et immobilier', memoFocus: "parties, bien (adresse, nature, surfaces, lots), prix et financement, conditions suspensives, dates clés, diagnostics, charges et travaux", calcDom: 'Prix et financement', textDom: 'Rédaction',
     intro: (o, d) => `Tu es un notaire et juriste immobilier expérimenté (droit immobilier français, copropriété, baux, fiscalité immobilière). Je te joins des documents notariaux ou immobiliers à contrôler${o ? ' (dossier « ' + o + ' »)' : ''}${d ? ' (date de référence : ' + d + ')' : ''} :`,
     missionHead: "Mission : contrôler ces documents avant signature (avant-contrat, acte, bail, état daté…) et lister les points à revoir, en particulier :",
     missions: [
@@ -555,7 +584,7 @@ const PROFILES = {
     coverSub: 'Contrôle des documents notariaux et immobiliers', orgDefault: 'Dossier immobilier'
   },
   urbanisme: {
-    label: 'Urbanisme et technique', calcDom: 'Surfaces et métrés', textDom: 'Rédaction',
+    label: 'Urbanisme et technique', memoFocus: "projet, localisation, surfaces, règles applicables, autorisations, coûts, planning et principaux choix techniques", calcDom: 'Surfaces et métrés', textDom: 'Rédaction',
     intro: (o, d) => `Tu es un urbaniste et ingénieur de bureau d'études expérimenté (Code de l'urbanisme, PLU/PLUi, construction et BTP, marchés de travaux). Je te joins des documents d'urbanisme ou techniques à contrôler${o ? ' (projet « ' + o + ' »)' : ''}${d ? ' (date de référence : ' + d + ')' : ''} :`,
     missionHead: 'Mission : contrôler ces documents avant dépôt, validation ou lancement des travaux, et lister les points à revoir, en particulier :',
     missions: [
@@ -573,7 +602,7 @@ const PROFILES = {
     coverSub: "Contrôle des documents d'urbanisme et techniques", orgDefault: 'Projet'
   },
   informatique: {
-    label: 'Informatique', calcDom: 'Planning et chiffrage', textDom: 'Rédaction',
+    label: 'Informatique', memoFocus: "périmètre, exigences majeures, architecture, engagements de service, planning, coûts et responsabilités de chaque partie", calcDom: 'Planning et chiffrage', textDom: 'Rédaction',
     intro: (o, d) => `Tu es un architecte des systèmes d'information et consultant en contrats informatiques expérimenté (cahiers des charges, spécifications, contrats SaaS et d'intégration, sécurité, RGPD). Je te joins des documents informatiques à contrôler${o ? ' (projet « ' + o + ' »)' : ''}${d ? ' (date de référence : ' + d + ')' : ''} :`,
     missionHead: 'Mission : contrôler ces documents avant validation ou signature, et lister les points à revoir, en particulier :',
     missions: [
@@ -1099,6 +1128,7 @@ function renderFiles() {
     <button class="x" data-i="${i}" title="Retirer" ${state.busy ? 'disabled' : ''}>×</button></li>`).join('');
   $('#files').querySelectorAll('.x').forEach(b => b.onclick = () => { state.docs.splice(+b.dataset.i, 1); renderFiles(); if (!state.docs.length) $('#reportCard').classList.add('hidden'); });
   $('#genBtn').disabled = state.busy || !state.docs.some(d => d.pages.length);
+  $('#memoBtn').disabled = $('#genBtn').disabled;
   $('#drop').classList.toggle('hidden', state.docs.length > 0 && window.innerWidth < 560);
 }
 
@@ -1207,9 +1237,11 @@ const AI_URL = { Claude: 'https://claude.ai/new', ChatGPT: 'https://chatgpt.com/
 const AI_PREFILL = { Claude: true, ChatGPT: true, Gemini: false, Grok: true };
 document.querySelectorAll('.open-ai').forEach(b => b.onclick = async () => {
   const ai = b.dataset.ai, base = AI_URL[ai];
-  $('#aiSrc').value = ai; store.set('ai', ai);
-  const p = $('#promptTxt').value;
-  const copied = await copyText(p, $('#promptTxt'));
+  const srcTa = $('#' + (b.dataset.src || 'promptTxt'));
+  if (srcTa.id === 'promptTxt') $('#aiSrc').value = ai;
+  store.set('ai', ai);
+  const p = srcTa.value;
+  const copied = await copyText(p, srcTa);
   const q = encodeURIComponent(p);
   if (AI_PREFILL[ai] && q.length <= MAX_URL) {
     window.open(base + '?q=' + q, '_blank', 'noopener');
@@ -1600,6 +1632,93 @@ async function embedSources(bytes, holders, refLinks, rowPos) {
   }
   return await out.save();
 }
+/* ---------- Mémo de synthèse ---------- */
+function buildMemoPrompt() {
+  const P = PROFILES[MODE], coll = $('#fColl').value.trim(), seance = $('#fDate').value;
+  const dateFr = seance ? new Date(seance).toLocaleDateString('fr-FR') : '';
+  const docs = state.docs.filter(d => d.pages.length);
+  const L = [P.intro(coll, dateFr)];
+  docs.forEach(d => L.push(`- ${d.name} (${d.numPages} p.)`));
+  L.push('', "Mission : rédige un MÉMO DE SYNTHÈSE court et factuel (une page, deux au maximum) destiné à un lecteur pressé qui n'a pas le temps de lire les documents.",
+    'Contenu attendu : ' + P.memoFocus + '.',
+    '', 'Structure obligatoire, en Markdown simple, avec exactement ces titres :',
+    '## Objet', '(2 à 3 phrases)',
+    '## Points clés', '(5 à 10 puces, avec les chiffres et dates importants, et la référence « document, p. X »)',
+    '## Enjeux et décisions attendues', '(3 à 5 puces)',
+    "## Points d'attention", '(3 à 6 puces : risques, incohérences ou informations manquantes)',
+    '## Questions à poser', '(3 à 5 puces)',
+    '', "Règles : uniquement des faits présents dans les documents, aucun chiffre inventé ; phrases courtes ; pas de tableau ; pas de bloc de code ; ignore les en-têtes et pieds de page. " + AI_RULES_COMMON);
+  return L.join('\n');
+}
+$('#memoBtn').onclick = () => {
+  const docs = state.docs.filter(d => d.pages.length); if (!docs.length) return;
+  if (!state.findings.length) state.findings = analyze(docs); // pour les points prioritaires
+  $('#memoPrompt').value = buildMemoPrompt();
+  $('#memoDlg').showModal();
+};
+function mdToBlocks(md) {
+  const out = [];
+  md.replace(/\r/g, '').split('\n').forEach(raw => {
+    let l = raw.trim(); if (!l || /^```/.test(l) || /^\|/.test(l) || /^-{3,}$/.test(l)) return;
+    l = l.replace(/\*\*(.+?)\*\*/g, '$1').replace(/__(.+?)__/g, '$1').replace(/(^|\s)\*(\S.*?)\*(?=\s|$)/g, '$1$2').replace(/`/g, '');
+    let m;
+    if ((m = l.match(/^#{1,4}\s+(.*)$/))) out.push({ t: 'h', s: m[1] });
+    else if ((m = l.match(/^(?:[-*•]|\d+[.)])\s+(.*)$/))) out.push({ t: 'li', s: m[1] });
+    else out.push({ t: 'p', s: l });
+  });
+  const first = out.findIndex(b => b.t === 'h'); // retire le préambule de l'IA (« Voici le mémo : »)
+  return first > 0 ? out.slice(first) : out;
+}
+$('#memoPdfBtn').onclick = async () => {
+  if (!window.jspdf) { alert("Le module d'export PDF n'est pas disponible hors ligne tant que l'application n'a pas été ouverte une fois en ligne."); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight(), M = 18;
+  const P = PROFILES[MODE], coll = $('#fColl').value.trim(), seance = $('#fDate').value, author = $('#fAuthor').value.trim();
+  const now = new Date(), logo = document.querySelector('#splash img').src;
+  // en-tête
+  doc.setFillColor(20, 16, 18); doc.rect(0, 0, W, 30, 'F');
+  doc.setFillColor(142, 15, 22); doc.rect(0, 30, W, 1.2, 'F');
+  try { doc.addImage(logo, 'JPEG', M - 4, 3.5, 18.4, 23); } catch (e) { }
+  doc.setTextColor(209, 173, 102); doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.text('MÉMO', M + 18, 13);
+  doc.setTextColor(241, 233, 228); doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+  doc.text(pdfSafe([coll || P.orgDefault, seance ? P.dateWord + ' ' + new Date(seance).toLocaleDateString('fr-FR') : ''].filter(Boolean).join(' - ')), M + 18, 20);
+  doc.setFontSize(8.5); doc.setTextColor(185, 170, 164);
+  doc.text(pdfSafe(`${P.label} - établi le ${now.toLocaleDateString('fr-FR')}${author ? ' par ' + author : ''}`), M + 18, 25.5);
+  let y = 40;
+  const ensure = h => { if (y + h > PH - 18) { doc.addPage(); y = 18; } };
+  // documents
+  doc.setTextColor(110, 110, 110); doc.setFontSize(8.5);
+  const dl = doc.splitTextToSize(pdfSafe('Documents : ' + state.docs.map(d => `${d.name} (${d.numPages || 0} p.)`).join(' ; ')), W - 2 * M);
+  doc.text(dl, M, y); y += dl.length * 3.8 + 5;
+  const H = s => { ensure(12); y += 2; doc.setFillColor(142, 15, 22); doc.rect(M, y - 4, 1.4, 5.5, 'F'); doc.setTextColor(30, 30, 30); doc.setFont('helvetica', 'bold'); doc.setFontSize(11.5); doc.text(pdfSafe(s), M + 4, y); y += 6.5; };
+  const T = (s, bullet) => {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(40, 40, 40);
+    const x = bullet ? M + 7 : M + 4, lines = doc.splitTextToSize(pdfSafe(s), W - x - M);
+    lines.forEach((ln, i) => { ensure(5); if (bullet && i === 0) { doc.setFillColor(209, 173, 102); doc.circle(M + 4.6, y - 1.2, 0.8, 'F'); } doc.text(ln, x, y); y += 4.8; });
+    y += bullet ? 0.6 : 2;
+  };
+  const blocks = mdToBlocks($('#memoAnswer').value);
+  if (blocks.length) blocks.forEach(b => b.t === 'h' ? H(b.s) : T(b.s, b.t === 'li'));
+  else { H('Objet'); T(`Mémo établi à partir de ${state.docs.length} document(s) (${P.label.toLowerCase()}). Aucune synthèse IA n'a été collée : seuls les points détectés automatiquement figurent ci-dessous.`); }
+  if ($('#memoPts').checked) {
+    const pts = state.findings.filter(f => f.include).sort((a, b) => SEV_ORDER[a.sev] - SEV_ORDER[b.sev]).slice(0, 6);
+    if (pts.length) {
+      H("Points relevés par l'analyse automatique");
+      pts.forEach(f => T(`${f.dom} - ${f.title} (${f.refs.map(r => r.doc + (r.page ? ', p. ' + r.page : '')).join(' ; ')})`, true));
+      const rest = state.findings.filter(f => f.include).length - pts.length;
+      if (rest > 0) T(`… et ${rest} autre(s) point(s), détaillés dans le rapport complet.`);
+    }
+  }
+  const n = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i); doc.setFontSize(7.5); doc.setTextColor(140, 140, 140);
+    doc.text(pdfSafe(`KGB Doc v${APP.version} - © Olivier BERNARD 2026 - Mémo de travail, à vérifier par le lecteur`), M, PH - 8);
+    doc.text(`${i} / ${n}`, W - M, PH - 8, { align: 'right' });
+  }
+  downloadBytes(doc.output('arraybuffer'), 'KGB-Doc_memo_' + (seance || now.toISOString().slice(0, 10)) + '.pdf');
+};
+
 function downloadBytes(bytes, fn) {
   const blob = new Blob([bytes], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
