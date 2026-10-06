@@ -261,8 +261,9 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.10.2', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.10.3', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.10.3', d: '06/10/2026', items: ['Pagination de section (annexe numérotée 1/4, 2/4… à part du document) reconnue comme en-tête/pied de page'] },
   { v: '1.10.2', d: '06/10/2026', items: ['En-têtes, pieds de page et numéros de page (« 2/9 ») écartés de l\'analyse : plus de fausses redites'] },
   { v: '1.10.1', d: '06/10/2026', items: ['Boutons IA avec logo (fichiers à déposer dans logos/), badge de remplacement sinon'] },
   { v: '1.10.0', d: '06/10/2026', items: ['Gemini et Grok ajoutés comme IA alternatives (avec Claude et ChatGPT)'] },
@@ -699,7 +700,8 @@ function checkRedites(docs, add) {
     const len = list[0].nv.length;
     if (list.every(o => o.nv.length === len)) {
       const diffPos = [...Array(len).keys()].filter(i => new Set(list.map(o => o.nv[i])).size > 1);
-      if (diffPos.length && list.every(o => diffPos.every(i => Math.abs(o.nv[i] - o.page) <= 1))) continue;
+      const paged = i => { const offs = new Set(list.map(o => o.nv[i] - o.page)); return offs.size === 1 || list.every(o => Math.abs(o.nv[i] - o.page) <= 1); };
+      if (diffPos.length && diffPos.every(paged)) continue;
     }
     const reps = distinct.map(v => list.find(o => o.vals === v)).slice(0, 4);
     add({
@@ -755,7 +757,8 @@ function stripRunning(pages) {
       if (LONE_PAGENUM.test(txt)) { removed++; return false; }
       const yr = (l.y - oy) / H, edge = yr < 0.075 || yr > 0.925, pn = HAS_PAGENUM.test(txt);
       const c = count.get(skelOf(l)) || 0;
-      const run = (edge || pn) && c >= minRep && !(TOTAL_RE.test(txt) && !pn);
+      // pagination (« 2/4 », « page 3 ») répétée au moins 2 fois = en-tête/pied de section (ex. annexe paginée à part)
+      const run = (pn && c >= 2) || (edge && c >= Math.min(minRep, 3) && !TOTAL_RE.test(txt));
       if (run) removed++;
       return !run;
     });
