@@ -19,6 +19,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <style>
 :root{
   --bg:#141012; --bg2:#1c1517; --card:#221a1c; --line:#3a2c2f; --ink:#f1e9e4; --ink2:#b9aaa4; --ink3:#857571;
@@ -180,7 +181,10 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
         <label class="f">Rédigé par<input type="text" id="fAuthor" placeholder="Nom"></label>
       </div>
       <div class="row" style="margin-top:14px;justify-content:space-between">
-        <label class="toggle"><input type="checkbox" id="autoChk" checked> Rapport automatique dès l'ajout des documents</label>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <label class="toggle"><input type="checkbox" id="autoChk" checked> Rapport automatique dès l'ajout des documents</label>
+          <label class="toggle"><input type="checkbox" id="attachChk" checked> Joindre les documents d'origine au PDF (liens vers les passages surlignés)</label>
+        </div>
         <button class="btn primary" id="genBtn" disabled>⚙ Générer le rapport</button>
       </div>
     </section>
@@ -235,8 +239,11 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.5.0', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.8.0', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.8.0', d: '06/10/2026', items: ['Page de garde du rapport : insigne, titre, collectivité, séance, chiffres clés', 'Liste des documents analysés avec liens vers chaque document joint'] },
+  { v: '1.7.0', d: '06/10/2026', items: ['Documents d\'origine intégrés à la fin du rapport PDF (option)', 'Chaque référence est un lien vers la page citée ; le passage est surligné et numéroté', 'Clic sur un surlignage : retour à la remarque correspondante'] },
+  { v: '1.6.0', d: '06/10/2026', items: ['PDF : une section par thème avec bandeau coloré', 'Vignettes cliquables menant directement à la section du thème, liens « Retour à la synthèse »', 'Signets PDF (panneau latéral) : Synthèse, chaque thème, Annexe'] },
   { v: '1.5.0', d: '06/10/2026', items: ['ChatGPT disponible comme IA annexe, au même titre que Claude (prompt prérempli, import de la réponse)', 'Source de chaque point IA indiquée (Claude ou ChatGPT)'] },
   { v: '1.4.0', d: '06/10/2026', items: ['Vignettes par thème (icône, couleur, nombre de points, part prioritaire) servant de filtres', 'PDF : répartition par thème en vignettes, colonne Thème colorée, points regroupés par thème'] },
   { v: '1.3.2', d: '06/10/2026', items: ['Favicon (ICO + PNG) et icône Apple dédiée'] },
@@ -364,7 +371,7 @@ function buildLines(items) {
     cells.forEach(c => c.text = c.text.replace(/\s+/g, ' ').trim());
     const nums = [];
     cells.forEach(c => { const ns = extractNums(c.text); ns.forEach(n => nums.push({ ...n, x: c.x, x2: c.x2, solo: ns.length === 1 && c.text.length < 40 })); });
-    return { y: L.y, cells, text: cells.map(c => c.text).join('   '), nums };
+    return { y: L.y, h: Math.max(...L.items.map(i => i.h)), x1: cells[0].x, x2: Math.max(...cells.map(c => c.x2)), cells, text: cells.map(c => c.text).join('   '), nums };
   });
 }
 
@@ -672,7 +679,8 @@ async function parsePdf(data, name, onPage) {
     // les lignes de tableau (plusieurs cellules) sont isolées par des sauts de ligne
     const text = lines.map(l => l.cells.length > 1 ? '\n' + l.text + '\n' : l.text).join(' ').replace(/-\s(?=[a-zà-ÿ])/g, '').replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').replace(/\n+/g, '\n');
     chars += text.length;
-    pages.push({ n: p, lines, text });
+    const vp = pg.getViewport({ scale: 1 });
+    pages.push({ n: p, lines, text, w: vp.width, h: vp.height, ox: pg.view[0], oy: pg.view[1] });
     onPage && onPage(p, pdf.numPages);
   }
   return { name, numPages: pdf.numPages, pages, chars };
@@ -701,6 +709,8 @@ $('#enter').onclick = () => {
 ['fColl', 'fAuthor'].forEach(id => { const el = $('#' + id); el.value = store.get(id) || ''; el.oninput = () => store.set(id, el.value); });
 $('#autoChk').checked = store.get('auto') !== '0';
 $('#autoChk').onchange = e => store.set('auto', e.target.checked ? '1' : '0');
+$('#attachChk').checked = store.get('attach') !== '0';
+$('#attachChk').onchange = e => store.set('attach', e.target.checked ? '1' : '0');
 
 $('#pickBtn').onclick = () => $('#fileIn').click();
 $('#fileIn').onchange = e => { addFiles([...e.target.files]); e.target.value = ''; };
@@ -721,7 +731,9 @@ async function addFiles(files) {
     const entry = { name: f.name, status: 'Lecture…', pages: [] };
     state.docs.push(entry); renderFiles();
     try {
-      const d = await parsePdf(new Uint8Array(await f.arrayBuffer()), f.name, (p, n) => {
+      const raw = new Uint8Array(await f.arrayBuffer());
+      entry.bytes = raw.slice(); // copie conservée pour l'intégration au rapport (pdf.js peut détacher le buffer)
+      const d = await parsePdf(raw, f.name, (p, n) => {
         bar.style.width = ((i + p / n) / files.length * 100) + '%';
         entry.status = `Page ${p}/${n}`; renderFiles();
       });
@@ -907,7 +919,13 @@ $('#allBtn').onclick = () => { const v = !state.findings.every(f => f.include); 
 
 /* ---------- Export PDF ---------- */
 const pdfSafe = s => String(s).replace(/[   ]/g, ' ').replace(/[−–—]/g, '-').replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/…/g, '...').replace(/≠/g, '<>').replace(/[^\x20-\x7E -ÿ€\n]/g, '');
-$('#pdfBtn').onclick = () => {
+$('#pdfBtn').onclick = async () => {
+  const pdfBtn = $('#pdfBtn'), pdfLbl = pdfBtn.innerHTML;
+  pdfBtn.disabled = true; pdfBtn.innerHTML = '<span class="spin"></span> Création du PDF…';
+  try { await exportPdf(); } catch (e) { console.error(e); alert('Erreur lors de la création du PDF : ' + e.message); }
+  pdfBtn.disabled = false; pdfBtn.innerHTML = pdfLbl;
+};
+async function exportPdf() {
   if (!window.jspdf) { alert("Le module d'export PDF n'est pas disponible hors ligne tant que l'application n'a pas été ouverte une fois en ligne."); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -915,7 +933,72 @@ $('#pdfBtn').onclick = () => {
   const sel = state.findings.filter(f => f.include);
   const coll = $('#fColl').value.trim(), seance = $('#fDate').value, author = $('#fAuthor').value.trim();
   const now = new Date();
+  const PH0 = doc.internal.pageSize.getHeight();
+  const logo = document.querySelector('#splash img').src;
+  const seanceTxt = seance ? new Date(seance).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
+  const SYN = 2; // page de la synthèse
+  const coverDocs = [], sepPages = {};
 
+  /* ===== Page de garde ===== */
+  doc.setFillColor(20, 16, 18); doc.rect(0, 0, W, PH0, 'F');
+  doc.setFillColor(74, 11, 16); doc.rect(0, 0, W, 132, 'F');
+  doc.setFillColor(142, 15, 22); doc.rect(0, 132, W, 1.6, 'F');
+  doc.setDrawColor(209, 173, 102); doc.setLineWidth(0.3); doc.rect(7, 7, W - 14, PH0 - 14);
+  doc.setTextColor(209, 173, 102); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+  doc.text('K G B   D O C', M + 2, 17);
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(200, 185, 178);
+  doc.text(pdfSafe(now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })), W - M - 2, 17, { align: 'right' });
+  try {
+    const lw = 76, lh = lw * 1402 / 1122, lx = (W - lw) / 2, ly = 24;
+    doc.setFillColor(12, 9, 10); doc.roundedRect(lx - 2.4, ly - 2.4, lw + 4.8, lh + 4.8, 2.5, 2.5, 'F');
+    doc.setDrawColor(209, 173, 102); doc.setLineWidth(0.8); doc.roundedRect(lx - 1.6, ly - 1.6, lw + 3.2, lh + 3.2, 2, 2, 'S');
+    doc.addImage(logo, 'JPEG', lx, ly, lw, lh);
+  } catch (e) { }
+  let cy = 150;
+  doc.setTextColor(209, 173, 102); doc.setFont('helvetica', 'bold'); doc.setFontSize(30);
+  doc.text("RAPPORT D'ANALYSE", W / 2, cy, { align: 'center' }); cy += 9;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(12); doc.setTextColor(200, 185, 178);
+  doc.text('Contrôle des documents préparatoires au conseil', W / 2, cy, { align: 'center' }); cy += 14;
+  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(17);
+  doc.text(pdfSafe(coll || 'Documents du conseil'), W / 2, cy, { align: 'center' }); cy += 7.5;
+  if (seanceTxt) { doc.setFont('helvetica', 'normal'); doc.setFontSize(12); doc.setTextColor(230, 220, 214); doc.text(pdfSafe('Séance du ' + seanceTxt), W / 2, cy, { align: 'center' }); cy += 6; }
+  cy += 6;
+  // chiffres clés
+  const nThemes = new Set(sel.map(f => f.dom)).size;
+  const kpis = [[String(sel.length), 'points à revoir', [241, 233, 228]], [String(sel.filter(f => f.sev === 'haute').length), 'prioritaires', [229, 72, 77]], [String(nThemes), 'thèmes concernés', [209, 173, 102]]];
+  const kw = 46, kg = 6, kx0 = (W - (3 * kw + 2 * kg)) / 2;
+  kpis.forEach(([v, l, c], i) => {
+    const x = kx0 + i * (kw + kg);
+    doc.setDrawColor(90, 70, 72); doc.setFillColor(34, 26, 28); doc.setLineWidth(0.3); doc.roundedRect(x, cy, kw, 20, 2, 2, 'FD');
+    doc.setTextColor(...c); doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.text(v, x + kw / 2, cy + 10, { align: 'center' });
+    doc.setTextColor(185, 170, 164); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.text(l, x + kw / 2, cy + 16, { align: 'center' });
+  });
+  cy += 30;
+  // documents de référence
+  doc.setTextColor(209, 173, 102); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+  doc.text('DOCUMENTS ANALYSÉS' + ($('#attachChk').checked ? ' (joints en fin de rapport)' : ''), M + 6, cy);
+  doc.setDrawColor(209, 173, 102); doc.setLineWidth(0.3); doc.line(M + 6, cy + 2, W - M - 6, cy + 2); cy += 7;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+  const maxDocs = 7;
+  state.docs.slice(0, maxDocs).forEach((d, di) => {
+    const lbl = pdfSafe(`${di + 1}.  ${d.name}`), meta = `${d.numPages || 0} p.`;
+    doc.setTextColor(241, 233, 228); doc.text(doc.splitTextToSize(lbl, W - 2 * M - 40)[0], M + 6, cy);
+    doc.setTextColor(150, 140, 136); doc.text(meta, W - M - 6, cy, { align: 'right' });
+    coverDocs.push({ di, x: M + 5, y: cy - 4.2, w: W - 2 * M - 10, h: 6 });
+    cy += 6.2;
+  });
+  if (state.docs.length > maxDocs) { doc.setTextColor(150, 140, 136); doc.text(`+ ${state.docs.length - maxDocs} autre(s) document(s)`, M + 6, cy); cy += 6; }
+  // pied de page de garde
+  doc.setTextColor(185, 170, 164); doc.setFontSize(9);
+  doc.text(pdfSafe(`Établi${author ? ' par ' + author : ''} le ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`), W / 2, PH0 - 30, { align: 'center' });
+  doc.setFontSize(8); doc.setTextColor(130, 120, 116);
+  doc.text('Document de travail - analyse automatique et assistée, à vérifier par le lecteur', W / 2, PH0 - 24, { align: 'center' });
+  doc.setTextColor(209, 173, 102);
+  doc.text(pdfSafe(`KGB Doc v${APP.version} - © Olivier BERNARD 2026`), W / 2, PH0 - 16, { align: 'center' });
+  doc.outline.add(null, 'Page de garde', { pageNumber: 1 });
+
+  /* ===== Synthèse ===== */
+  doc.addPage('a4', 'p');
   doc.setFillColor(20, 16, 18); doc.rect(0, 0, W, 34, 'F');
   try { doc.addImage(document.querySelector('#splash img').src, 'JPEG', M, 4, 20.8, 26); } catch (e) { }
   doc.setTextColor(209, 173, 102); doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
@@ -939,8 +1022,17 @@ $('#pdfBtn').onclick = () => {
   const hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
   sel.sort((a, b) => DOMAINS.indexOf(a.dom) - DOMAINS.indexOf(b.dom) || SEV_ORDER[a.sev] - SEV_ORDER[b.sev]);
   const used = DOMAINS.filter(d => sel.some(f => f.dom === d));
+  const attach = $('#attachChk').checked && !!window.PDFLib && state.docs.some(d => d.bytes && d.pages.length);
+  const refLinks = [], rowPos = {}, holders = [];
+  const PH = doc.internal.pageSize.getHeight();
+  const curPage = () => doc.internal.getCurrentPageInfo().pageNumber;
+  const tiles = [], anchors = {};
+  const sumTop = 38;
+  doc.outline.add(null, 'Synthèse', { pageNumber: SYN });
   if (used.length) {
-    doc.setTextColor(30, 30, 30); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('Répartition par thème', M, y); y += 4;
+    doc.setTextColor(30, 30, 30); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('Répartition par thème', M, y);
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(130, 130, 130);
+    doc.text('Cliquez sur un thème pour aller directement à sa section', W - M, y, { align: 'right' }); y += 4;
     const tw = 41, th = 17, gap = 4.3, perRow = 4;
     used.forEach((d, i) => {
       const x = M + (i % perRow) * (tw + gap), yy = y + Math.floor(i / perRow) * (th + gap);
@@ -950,61 +1042,218 @@ $('#pdfBtn').onclick = () => {
       doc.setFillColor(...col); doc.rect(x, yy, 2.2, th, 'F');
       doc.setTextColor(...col.map(v => Math.round(v * 0.62))); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
       doc.text(pdfSafe(d.toUpperCase()), x + 4.5, yy + 5.5);
+      doc.setFontSize(9); doc.text('>', x + tw - 3.5, yy + 5.5, { align: 'right' });
       doc.setTextColor(30, 30, 30); doc.setFontSize(15); doc.text(String(items.length), x + 4.5, yy + 13);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(hi ? 200 : 120, hi ? 50 : 120, hi ? 55 : 120);
       doc.text(hi ? `dont ${hi} prioritaire${hi > 1 ? 's' : ''}` : 'à vérifier', x + 12, yy + 13);
+      tiles.push({ d, x, y: yy, w: tw, h: th });
     });
     y += Math.ceil(used.length / perRow) * (th + gap) + 4;
   }
 
   if (sel.length) {
     const sevCol = { haute: [229, 72, 77], moyenne: [214, 140, 30], faible: [140, 140, 140] };
-    doc.autoTable({
-      startY: y, margin: { left: M, right: M, bottom: 18 },
-      head: [['N°', 'Thème', 'Point à revoir', 'Référence', 'Priorité']],
-      body: sel.map((f, i) => [
-        String(i + 1),
-        pdfSafe(f.dom),
-        pdfSafe(`${f.title}\n${f.detail}` + (f.note.trim() ? `\n> Commentaire : ${f.note.trim()}` : '')),
-        pdfSafe(f.refs.map(r => `${r.doc}${r.page ? ', p. ' + r.page : ''}`).join('\n') || '-'),
-        f.sev.toUpperCase()
-      ]),
-      styles: { font: 'helvetica', fontSize: 8.6, cellPadding: 2.2, valign: 'top', lineColor: [220, 214, 210], lineWidth: 0.2 },
-      headStyles: { fillColor: [142, 15, 22], textColor: 255, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [249, 246, 244] },
-      columnStyles: { 0: { cellWidth: 9, halign: 'center' }, 1: { cellWidth: 25, fontStyle: 'bold', fontSize: 7.8 }, 3: { cellWidth: 40 }, 4: { cellWidth: 21, fontStyle: 'bold', fontSize: 7.6 } },
-      didParseCell: d => {
-        if (d.section !== 'body') return;
-        const f = sel[d.row.index];
-        if (d.column.index === 1) { d.cell.styles.fillColor = hex(DOMAIN_META[f.dom].c); d.cell.styles.textColor = 255; }
-        if (d.column.index === 4) d.cell.styles.textColor = sevCol[f.sev];
-      },
-    });
-    y = doc.lastAutoTable.finalY + 8;
+    const numOf = f => sel.indexOf(f) + 1;
+    for (const d of used) {
+      const items = sel.filter(f => f.dom === d), col = hex(DOMAIN_META[d].c);
+      if (y > PH - 55) { doc.addPage(); y = 18; }
+      // bandeau de section (= ancre)
+      doc.setFillColor(...col); doc.roundedRect(M, y, W - 2 * M, 10, 1.5, 1.5, 'F');
+      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11.5);
+      doc.text(pdfSafe(d.toUpperCase()), M + 4, y + 6.8);
+      const tlen = doc.getTextWidth(pdfSafe(d.toUpperCase()));
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+      const hi = items.filter(f => f.sev === 'haute').length;
+      doc.text(`${items.length} point${items.length > 1 ? 's' : ''}${hi ? ' - ' + hi + ' prioritaire' + (hi > 1 ? 's' : '') : ''}`, M + 7 + tlen, y + 6.8);
+      doc.setFontSize(8); doc.text('^ Retour à la synthèse', W - M - 3, y + 6.6, { align: 'right' });
+      doc.link(W - M - 40, y, 40, 10, { pageNumber: SYN, top: sumTop });
+      anchors[d] = { page: curPage(), top: Math.max(0, y - 4) };
+      doc.outline.add(null, `${d} (${items.length})`, { pageNumber: curPage() });
+      y += 12;
+      doc.autoTable({
+        startY: y, margin: { left: M, right: M, bottom: 18 },
+        head: [['N°', 'Point à revoir', 'Référence', 'Priorité']],
+        body: items.map(f => [
+          String(numOf(f)),
+          pdfSafe(`${f.title}\n${f.detail}` + (f.cat === 'ia' && f.src ? `\n(Analyse ${f.src})` : '') + (f.note.trim() ? `\n> Commentaire : ${f.note.trim()}` : '')),
+          pdfSafe(f.refs.map(r => `${r.doc}${r.page ? ', p. ' + r.page : ''}`).join('\n') || '-'),
+          f.sev.toUpperCase()
+        ]),
+        styles: { font: 'helvetica', fontSize: 8.6, cellPadding: 2.2, valign: 'top', lineColor: [220, 214, 210], lineWidth: 0.2 },
+        headStyles: { fillColor: col.map(v => Math.round(v * 0.55)), textColor: 255, fontStyle: 'bold', fontSize: 8 },
+        alternateRowStyles: { fillColor: col.map(v => Math.round(v + (255 - v) * 0.93)) },
+        columnStyles: { 0: { cellWidth: 9, halign: 'center', fontStyle: 'bold' }, 2: { cellWidth: 44 }, 3: { cellWidth: 21, fontStyle: 'bold', fontSize: 7.6 } },
+        didParseCell: c => {
+          if (c.section !== 'body') return;
+          if (c.column.index === 3) c.cell.styles.textColor = sevCol[items[c.row.index].sev];
+          if (c.column.index === 2 && attach && items[c.row.index].refs.some(r => resolveRef(r))) c.cell.styles.textColor = [25, 90, 190];
+        },
+        didDrawCell: c => {
+          if (c.section !== 'body') return;
+          const f = items[c.row.index], pg = curPage();
+          if (c.column.index === 0) rowPos[numOf(f)] = { page: pg, y: c.cell.y };
+          if (c.column.index === 2 && attach) {
+            const k = f.refs.length || 1;
+            f.refs.forEach((r, i) => refLinks.push({ r, num: numOf(f), page: pg, x: c.cell.x, y: c.cell.y + i * c.cell.height / k, w: c.cell.width, h: c.cell.height / k }));
+          }
+        },
+      });
+      y = doc.lastAutoTable.finalY + 9;
+    }
 
     // Annexe : extraits
     doc.addPage(); y = 18;
-    doc.setTextColor(30, 30, 30); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('Annexe - extraits cités', M, y); y += 4;
+    doc.outline.add(null, 'Annexe - extraits cités', { pageNumber: curPage() });
+    doc.setTextColor(30, 30, 30); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('Annexe - extraits cités', M, y);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120, 120, 120);
+    doc.text('^ Retour à la synthèse', W - M, y, { align: 'right' }); doc.link(W - M - 32, y - 4, 32, 6, { pageNumber: SYN, top: sumTop });
+    y += 4;
     doc.autoTable({
       startY: y, margin: { left: M, right: M, bottom: 18 },
-      head: [['N°', 'Document', 'Extrait']],
-      body: sel.flatMap((f, i) => f.refs.map(r => [String(i + 1), pdfSafe(`${r.doc}\np. ${r.page}`), pdfSafe(r.extract)])),
+      head: [['N°', 'Thème', 'Document', 'Extrait']],
+      body: sel.flatMap((f, i) => f.refs.map(r => [String(i + 1), pdfSafe(f.dom), pdfSafe(`${r.doc}\np. ${r.page}`), pdfSafe(r.extract)])),
       styles: { fontSize: 7.8, cellPadding: 1.8, valign: 'top', lineColor: [220, 214, 210], lineWidth: 0.2 },
       headStyles: { fillColor: [60, 50, 52], textColor: 255 },
-      columnStyles: { 0: { cellWidth: 9, halign: 'center' }, 1: { cellWidth: 46 } }
+      columnStyles: { 0: { cellWidth: 9, halign: 'center' }, 1: { cellWidth: 24, fontStyle: 'bold', fontSize: 7.2 }, 2: { cellWidth: 42 } },
+      didParseCell: c => { if (c.section === 'body' && c.column.index === 1) c.cell.styles.textColor = hex(DOMAIN_META[c.cell.raw] ? DOMAIN_META[c.cell.raw].c : '#666666'); }
     });
+
+    // liens des vignettes vers les sections
+    const last = curPage();
+    doc.setPage(SYN);
+    tiles.forEach(tl => { const a = anchors[tl.d]; if (a) doc.link(tl.x, tl.y, tl.w, tl.h, { pageNumber: a.page, top: a.top }); });
+    doc.setPage(last);
   }
 
+  // Documents d'origine : page de garde + emplacements (remplis ensuite par pdf-lib)
+  if (attach) state.docs.forEach((d, di) => {
+    if (!d.bytes || !d.pages.length) return;
+    doc.addPage('a4', 'p'); const sp = curPage(); sepPages[di] = sp;
+    doc.setFillColor(20, 16, 18); doc.rect(0, 0, W, PH, 'F');
+    doc.setTextColor(209, 173, 102); doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+    doc.text("DOCUMENT D'ORIGINE " + (di + 1) + ' / ' + state.docs.length, M, 110);
+    doc.setTextColor(241, 233, 228); doc.setFontSize(18);
+    doc.text(doc.splitTextToSize(pdfSafe(d.name), W - 2 * M), M, 122);
+    const nb = sel.filter(f => f.refs.some(r => resolveRef(r)?.di === di)).length;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(185, 170, 164);
+    doc.text(pdfSafe(`${d.numPages} page(s) - ${nb} remarque(s) renvoient à ce document`), M, 140);
+    doc.text(pdfSafe('Les passages cités sont surlignés en jaune et numérotés. Cliquez sur un surlignage pour revenir à la remarque.'), M, 148, { maxWidth: W - 2 * M });
+    doc.outline.add(null, 'Document : ' + d.name, { pageNumber: sp });
+    d.pages.forEach((p, pi) => {
+      const wmm = p.w * 25.4 / 72, hmm = p.h * 25.4 / 72;
+      doc.addPage([wmm, hmm], wmm > hmm ? 'l' : 'p');
+      holders.push({ di, pi, jsPage: curPage() });
+    });
+  });
+
   const n = doc.internal.getNumberOfPages();
+  // liens de la page de garde vers les documents joints
+  if (Object.keys(sepPages).length) {
+    const lp = curPage(); doc.setPage(1);
+    coverDocs.forEach(c => { if (sepPages[c.di]) doc.link(c.x, c.y, c.w, c.h, { pageNumber: sepPages[c.di], top: 0 }); });
+    doc.setPage(lp);
+  }
+  const skip = new Set(holders.map(h => h.jsPage)); skip.add(1);
   for (let i = 1; i <= n; i++) {
+    if (skip.has(i)) continue;
     doc.setPage(i); doc.setFontSize(8); doc.setTextColor(140, 140, 140);
     const H = doc.internal.pageSize.getHeight();
     doc.text(pdfSafe(`KGB Doc v${APP.version} - © Olivier BERNARD 2026 - Analyse automatique, à vérifier par le lecteur`), M, H - 8);
     doc.text(`${i} / ${n}`, W - M, H - 8, { align: 'right' });
   }
   const fn = 'KGB-Doc_rapport_' + (seance || now.toISOString().slice(0, 10)) + '.pdf';
-  doc.save(fn);
-};
+  let bytes = doc.output('arraybuffer');
+  if (attach && holders.length) bytes = await embedSources(bytes, holders, refLinks, rowPos);
+  downloadBytes(bytes, fn);
+}
+
+/* ---------- Intégration des documents d'origine (pdf-lib) ---------- */
+function resolveRef(r) {
+  const key = norm(String(r.doc || '')).replace(/ pdf$/, '');
+  let di = state.docs.findIndex(d => d.name === r.doc);
+  if (di < 0) di = state.docs.findIndex(d => { const k = norm(d.name).replace(/ pdf$/, ''); return key && (k.includes(key) || key.includes(k)); });
+  const d = state.docs[di]; const pi = parseInt(r.page, 10) - 1;
+  if (!d || !d.bytes || !(pi >= 0 && pi < d.pages.length)) return null;
+  return { di, pi };
+}
+function findLine(page, extract) {
+  const tok = s => norm(s).split(' ').filter(w => w.length > 2 || /\d/.test(w));
+  const et = new Set(tok(extract || '')); if (!et.size) return null;
+  let best = null, bs = 0;
+  for (const l of page.lines) {
+    const lt = tok(l.text); if (!lt.length) continue;
+    let c = 0; lt.forEach(w => et.has(w) && c++);
+    const s = c / Math.min(et.size, lt.length) * Math.min(1, lt.length / 3) + c * 0.001;
+    if (s > bs) { bs = s; best = l; }
+  }
+  return bs >= 0.5 ? best : null;
+}
+async function embedSources(bytes, holders, refLinks, rowPos) {
+  const { PDFDocument, rgb, StandardFonts } = PDFLib;
+  const out = await PDFDocument.load(bytes);
+  const pages = out.getPages(), K = 72 / 25.4, ctx = out.context;
+  const font = await out.embedFont(StandardFonts.HelveticaBold);
+  const cache = {};
+  for (const h of holders) {
+    const pg = pages[h.jsPage - 1];
+    if (!(h.di in cache)) {
+      try { cache[h.di] = await out.embedPdf(state.docs[h.di].bytes, Array.from({ length: state.docs[h.di].pages.length }, (_, i) => i)); }
+      catch (e) { cache[h.di] = null; }
+    }
+    if (cache[h.di]) pg.drawPage(cache[h.di][h.pi], { x: 0, y: 0, width: pg.getWidth(), height: pg.getHeight() });
+    else pg.drawText('Page non intégrable (document protégé ?)', { x: 40, y: pg.getHeight() / 2, size: 14, font, color: rgb(0.75, 0.1, 0.12) });
+  }
+  const link = (page, rect, dest, top) => {
+    const annot = ctx.obj({ Type: 'Annot', Subtype: 'Link', Rect: rect, Border: [0, 0, 0], Dest: [dest.ref, 'XYZ', null, top, null] });
+    page.node.addAnnot(ctx.register(annot));
+  };
+  const done = new Set(), lineTags = {};
+  for (const rl of refLinks) {
+    const res = resolveRef(rl.r); if (!res) continue;
+    const h = holders.find(x => x.di === res.di && x.pi === res.pi); if (!h) continue;
+    const src = pages[h.jsPage - 1], sp = state.docs[res.di].pages[res.pi], SH = src.getHeight();
+    const line = findLine(sp, rl.r.extract);
+    const rp = pages[rl.page - 1], RH = rp.getHeight();
+    let top = SH, hl = null;
+    if (line) {
+      const y = line.y - sp.oy;
+      hl = [Math.max(0, line.x1 - sp.ox - 3), y - 3, Math.min(src.getWidth(), line.x2 - sp.ox + 3), y + line.h + 2];
+      top = Math.min(SH, y + line.h + 60);
+    }
+    // lien remarque -> passage
+    link(rp, [rl.x * K, RH - (rl.y + rl.h) * K, (rl.x + rl.w) * K, RH - rl.y * K], src, top);
+    // surlignage + étiquette + lien retour
+    const key = h.jsPage + '|' + (hl ? hl.join(',') : 'top') + '|' + rl.num;
+    if (done.has(key)) continue; done.add(key);
+    const label = 'N° ' + rl.num;
+    const lw = font.widthOfTextAtSize(label, 7) + 6;
+    if (hl) {
+      src.drawRectangle({ x: hl[0], y: hl[1], width: hl[2] - hl[0], height: hl[3] - hl[1], color: rgb(1, 0.85, 0.1), opacity: 0.33, borderColor: rgb(0.85, 0.1, 0.12), borderWidth: 0.7, borderOpacity: 0.9 });
+      // étiquette dans la marge gauche, à hauteur de la ligne (décalée si plusieurs remarques sur la même ligne)
+      const lk = h.jsPage + '|' + hl[1]; const nth = lineTags[lk] = (lineTags[lk] || 0) + 1;
+      let lx = hl[0] - (lw + 2) * nth, ly = hl[1] + (hl[3] - hl[1] - 9) / 2;
+      if (lx < 2) { lx = Math.max(2, hl[0] + (lw + 2) * (nth - 1)); ly = Math.min(SH - 10, hl[3] + 1); }
+      src.drawRectangle({ x: lx, y: ly, width: lw, height: 9, color: rgb(0.75, 0.08, 0.12) });
+      src.drawText(label, { x: lx + 3, y: ly + 2.2, size: 7, font, color: rgb(1, 1, 1) });
+      const back = rowPos[rl.num];
+      if (back) { const bp = pages[back.page - 1], tb = bp.getHeight() - back.y * K + 8; link(src, [hl[0], hl[1], hl[2], hl[3]], bp, tb); link(src, [lx, ly, lx + lw, ly + 9], bp, tb); }
+    } else {
+      const lx = 6, ly = SH - 14;
+      src.drawRectangle({ x: lx, y: ly, width: lw + 52, height: 10, color: rgb(0.75, 0.08, 0.12) });
+      src.drawText(label + ' (page citée)', { x: lx + 3, y: ly + 2.6, size: 7, font, color: rgb(1, 1, 1) });
+      const back = rowPos[rl.num];
+      if (back) { const bp = pages[back.page - 1]; link(src, [lx, ly, lx + lw + 52, ly + 10], bp, bp.getHeight() - back.y * K + 8); }
+    }
+  }
+  return await out.save();
+}
+function downloadBytes(bytes, fn) {
+  const blob = new Blob([bytes], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = fn;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(() => { });
