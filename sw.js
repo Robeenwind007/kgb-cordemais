@@ -1,5 +1,5 @@
 // KGB Doc - service worker (cache hors ligne)
-const CACHE = 'kgbdoc-v1.10.1';
+const CACHE = 'kgbdoc-v1.10.2';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './favicon.ico', './favicon-32.png', './apple-touch-icon.png',
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',

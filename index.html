@@ -261,8 +261,9 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.10.1', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.10.2', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.10.2', d: '06/10/2026', items: ['En-têtes, pieds de page et numéros de page (« 2/9 ») écartés de l\'analyse : plus de fausses redites'] },
   { v: '1.10.1', d: '06/10/2026', items: ['Boutons IA avec logo (fichiers à déposer dans logos/), badge de remplacement sinon'] },
   { v: '1.10.0', d: '06/10/2026', items: ['Gemini et Grok ajoutés comme IA alternatives (avec Claude et ChatGPT)'] },
   { v: '1.9.0', d: '06/10/2026', items: ['Choix du type de documents : municipaux / intercommunaux ou généraux', 'Prompt IA, thèmes, libellés et page de garde adaptés au type choisi', 'Thèmes dédiés aux documents généraux : Contractuel, Fiscal, Commercial, Technique, Rédaction…'] },
@@ -689,11 +690,17 @@ function checkRedites(docs, add) {
     const skel = norm(s.replace(new RegExp(NS, 'g'), ' # '));
     if (skel.replace(/[^a-z]/g, '').length < 30) continue;
     if (!groups.has(skel)) groups.set(skel, []);
-    groups.get(skel).push({ doc: doc.name, page: page.n, vals: nums.map(n => n.raw).join(' | '), s });
+    groups.get(skel).push({ doc: doc.name, page: page.n, vals: nums.map(n => n.raw).join(' | '), nv: nums.map(n => n.v), s });
   }
   for (const [, list] of groups) {
     const distinct = [...new Set(list.map(o => o.vals))];
     if (distinct.length < 2 || list.length > 10) continue;
+    // garde-fou : seules différences = numéros de page (en-tête / pied de page non détecté)
+    const len = list[0].nv.length;
+    if (list.every(o => o.nv.length === len)) {
+      const diffPos = [...Array(len).keys()].filter(i => new Set(list.map(o => o.nv[i])).size > 1);
+      if (diffPos.length && list.every(o => diffPos.every(i => Math.abs(o.nv[i] - o.page) <= 1))) continue;
+    }
     const reps = distinct.map(v => list.find(o => o.vals === v)).slice(0, 4);
     add({
       cat: 'redite', sev: 'moyenne',
@@ -726,6 +733,37 @@ function analyze(docs) {
   return out;
 }
 
+// les lignes de tableau (plusieurs cellules) sont isolées par des sauts de ligne
+function pageText(lines) {
+  return lines.map(l => l.cells.length > 1 ? '\n' + l.text + '\n' : l.text).join(' ').replace(/-\s(?=[a-zà-ÿ])/g, '').replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').replace(/\n+/g, '\n');
+}
+/* En-têtes / pieds de page répétés (« Contrat … 13/07/2026  2/9 ») et numéros de page :
+   retirés de l'analyse pour ne pas être pris pour des redites ou des incohérences. */
+const LONE_PAGENUM = /^(?:page\s*)?\d{1,4}\s*(?:\/|sur|of)\s*\d{1,4}$|^(?:page|p\.)\s*\d{1,4}$|^[-–—]?\s*\d{1,4}\s*[-–—]?$/i;
+const HAS_PAGENUM = /(?<![\d\/.])\d{1,4}\s*\/\s*\d{1,4}(?![\d\/.])|\bpage\s*\d{1,4}\b|\b\d{1,4}\s+sur\s+\d{1,4}\b/i;
+function stripRunning(pages) {
+  const N = pages.length;
+  const skelOf = l => norm(l.text.replace(new RegExp(NS, 'g'), ' # '));
+  const count = new Map();
+  pages.forEach(p => { const seen = new Set(); p.lines.forEach(l => { const k = skelOf(l); if (k && !seen.has(k)) { seen.add(k); count.set(k, (count.get(k) || 0) + 1); } }); });
+  const minRep = Math.max(2, Math.ceil(N * 0.3));
+  let removed = 0;
+  pages.forEach(p => {
+    const H = p.h || 842, oy = p.oy || 0;
+    p.lines = p.lines.filter(l => {
+      const txt = l.text.trim();
+      if (LONE_PAGENUM.test(txt)) { removed++; return false; }
+      const yr = (l.y - oy) / H, edge = yr < 0.075 || yr > 0.925, pn = HAS_PAGENUM.test(txt);
+      const c = count.get(skelOf(l)) || 0;
+      const run = (edge || pn) && c >= minRep && !(TOTAL_RE.test(txt) && !pn);
+      if (run) removed++;
+      return !run;
+    });
+    p.text = pageText(p.lines);
+  });
+  return removed;
+}
+
 async function parsePdf(data, name, onPage) {
   const pdf = await pdfjsLib.getDocument({ data, isEvalSupported: false }).promise;
   const pages = []; let chars = 0;
@@ -734,13 +772,14 @@ async function parsePdf(data, name, onPage) {
     const tc = await pg.getTextContent();
     const lines = buildLines(tc.items);
     // les lignes de tableau (plusieurs cellules) sont isolées par des sauts de ligne
-    const text = lines.map(l => l.cells.length > 1 ? '\n' + l.text + '\n' : l.text).join(' ').replace(/-\s(?=[a-zà-ÿ])/g, '').replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').replace(/\n+/g, '\n');
+    const text = pageText(lines);
     chars += text.length;
     const vp = pg.getViewport({ scale: 1 });
     pages.push({ n: p, lines, text, w: vp.width, h: vp.height, ox: pg.view[0], oy: pg.view[1] });
     onPage && onPage(p, pdf.numPages);
   }
-  return { name, numPages: pdf.numPages, pages, chars };
+  const running = stripRunning(pages);
+  return { name, numPages: pdf.numPages, pages, chars, running };
 }
 if (typeof module !== 'undefined') module.exports = { setMode, classifyDomain, analyze, parsePdf, buildLines, extractNums, APP };
 </script>
