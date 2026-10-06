@@ -78,7 +78,7 @@ input[type=text],input[type=date],textarea{font:inherit;color:var(--ink);backgro
 textarea{resize:vertical;min-height:38px;width:100%}
 input:focus,textarea:focus{outline:2px solid var(--brass2);outline-offset:0}
 .toggle{display:flex;align-items:center;gap:8px;color:var(--ink2);font-size:15px}
-.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:5px;margin-bottom:6px}
+.seg{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:6px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:5px;margin-bottom:6px}
 .seg button{display:flex;align-items:center;gap:10px;text-align:left;border:1px solid transparent;background:none;color:var(--ink2);border-radius:9px;padding:10px 12px}
 .seg button .si{font-size:24px;line-height:1}
 .seg button b{display:block;color:var(--ink);font-size:15px}
@@ -181,6 +181,9 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
       <h2><span class="n">1</span>Documents</h2>
       <div class="seg" id="modeSeg" role="radiogroup" aria-label="Type de documents">
         <button data-m="collectivite" role="radio"><span class="si">🏛️</span><span><b>Municipaux / intercommunaux</b><small>Conseil municipal ou communautaire : budget, délibérations, M57, CGCT</small></span></button>
+        <button data-m="financier" role="radio"><span class="si">💹</span><span><b>Documents financiers</b><small>Comptes, budgets, prévisionnels, plans de financement</small></span></button>
+        <button data-m="rh" role="radio"><span class="si">👥</span><span><b>Documents RH</b><small>Contrats de travail, paie, accords, procédures</small></span></button>
+        <button data-m="juridique" role="radio"><span class="si">⚖️</span><span><b>Documents juridiques</b><small>Contrats, CGV, statuts, conventions : audit avant signature</small></span></button>
         <button data-m="general" role="radio"><span class="si">📄</span><span><b>Documents généraux</b><small>Contrats, devis, rapports, notes : cohérence, calculs, clauses</small></span></button>
       </div>
       <div class="row">
@@ -261,8 +264,9 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.10.3', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.11.0', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.11.0', d: '06/10/2026', items: ['Trois nouveaux types de documents : financiers, RH, juridiques', 'Prompts IA spécialisés (expert-comptable, droit social, avocat d\'affaires) et thèmes dédiés à chaque type', 'Champ « recommandation » repris de la réponse de l\'IA'] },
   { v: '1.10.3', d: '06/10/2026', items: ['Pagination de section (annexe numérotée 1/4, 2/4… à part du document) reconnue comme en-tête/pied de page'] },
   { v: '1.10.2', d: '06/10/2026', items: ['En-têtes, pieds de page et numéros de page (« 2/9 ») écartés de l\'analyse : plus de fausses redites'] },
   { v: '1.10.1', d: '06/10/2026', items: ['Boutons IA avec logo (fichiers à déposer dans logos/), badge de remplacement sinon'] },
@@ -350,16 +354,131 @@ const DOMAIN_META_GEN = {
   'Technique': { ic: '🛠️', c: '#7f9cc0' }, 'Rédaction': { ic: '✍️', c: '#c06ad6' }
 };
 Object.assign(DOMAIN_META, DOMAIN_META_GEN);
+const DOMAINS_FIN = ['Comptable', 'Fiscal', 'Trésorerie', 'Exploitation', 'Investissement', 'Endettement', 'Prévisionnel', 'Juridique', 'Gestion'];
+const DOMAIN_RULES_FIN = [
+  ['Fiscal', /\btva\b|\bht\b|\bttc\b|imp[ôo]t|fiscal|\btaxe|\bcfe\b|\bcvae\b|cr[ée]dit d'imp[ôo]t|\bis\b|liasse/i],
+  ['Trésorerie', /tr[ée]sorerie|disponibilit|liquidit|flux de tr[ée]sorerie|\bbfr\b|besoin en fonds de roulement|d[ée]couvert|encaissement|d[ée]caissement|cash/i],
+  ['Endettement', /emprunt|dette|endettement|remboursement|annuit|[ée]ch[ée]ancier|taux d'int[ée]r[êe]t|levier|covenant|capacit[ée] de remboursement/i],
+  ['Investissement', /investissement|immobilisation|acquisition|capex|amortissement|cession d'actif|subvention d'[ée]quipement/i],
+  ['Prévisionnel', /pr[ée]visionnel|budget|hypoth[èe]se|plan de financement|business plan|projection|sc[ée]nario|objectif/i],
+  ['Exploitation', /chiffre d'affaires|\bca\b|marge|\bebe\b|ebitda|r[ée]sultat d'exploitation|charges? de personnel|achats|valeur ajout[ée]e|\bcaf\b|rentabilit/i],
+  ['Juridique', /\barticle\b|\bloi\b|\bcode\b|statuts|assembl[ée]e|commissaire aux comptes|conformit|r[èe]glement/i],
+  ['Comptable', /bilan|compte de r[ée]sultat|annexe|[ée]criture|\bcompte\b|provision|\bactif|\bpassif|capitaux propres|balance|report [àa] nouveau|affectation du r[ée]sultat|\bpcg\b/i]
+];
+const DOMAINS_RH = ['Rémunération', 'Temps de travail', 'Contrat de travail', 'Effectifs', 'Formation', 'Santé-Sécurité', 'Dialogue social', 'Juridique', 'Gestion'];
+const DOMAIN_RULES_RH = [
+  ['Rémunération', /salaire|r[ée]mun[ée]ration|\bpaie\b|prime|brut|net [àa] payer|smic|minimum conventionnel|coefficient|indemnit|avantage en nature|cotisation|bulletin/i],
+  ['Temps de travail', /dur[ée]e du travail|heures? suppl[ée]mentaires|heures? compl[ée]mentaires|temps partiel|forfait jours|repos|astreinte|cong[ée]s|rtt|horaire|planning/i],
+  ['Contrat de travail', /contrat de travail|\bcdi\b|\bcdd\b|p[ée]riode d'essai|pr[ée]avis|non-concurrence|mobilit[ée]|avenant|embauche|licenciement|rupture conventionnelle|d[ée]mission|clause/i],
+  ['Effectifs', /effectif|organigramme|poste|recrutement|\betp\b|classification|qualification|emploi/i],
+  ['Formation', /formation|comp[ée]tence|\bcpf\b|entretien professionnel|apprentissage|alternance|d[ée]dit-formation/i],
+  ['Santé-Sécurité', /s[ée]curit[ée]|sant[ée]|document unique|\bduerp\b|accident du travail|m[ée]decine du travail|pr[ée]vention|risques? professionnels?|inaptitude/i],
+  ['Dialogue social', /\bcse\b|comit[ée] social|d[ée]l[ée]gu[ée]|syndic|n[ée]gociation|accord collectif|accord d'entreprise|consultation|convention collective|\bnao\b/i],
+  ['Juridique', /\barticle\b|code du travail|\bloi\b|jurisprudence|prud'?hom|conformit|r[èe]glement int[ée]rieur|rgpd|discrimination|[ée]galit[ée]/i]
+];
+const DOMAINS_JUR = ['Parties et pouvoirs', 'Obligations', 'Responsabilité', 'Durée et résiliation', 'Propriété intellectuelle', 'Données personnelles', 'Confidentialité', 'Litiges', 'Conformité', 'Rédaction', 'Gestion'];
+const DOMAIN_RULES_JUR = [
+  ['Données personnelles', /donn[ée]es? personnelles?|\brgpd\b|sous-traitant|responsable (du|de) traitement|\bcnil\b|transfert hors/i],
+  ['Propriété intellectuelle', /propri[ée]t[ée] intellectuelle|droit d'auteur|cession de droits|licence|marque|brevet|savoir-faire|code source|logiciel/i],
+  ['Confidentialité', /confidenti|secret|non-divulgation|\bnda\b/i],
+  ['Responsabilité', /responsabilit[ée]|plafond|dommages|indemnisation|garantie|assurance|force majeure|p[ée]nalit/i],
+  ['Durée et résiliation', /dur[ée]e|r[ée]siliation|reconduction|tacite|pr[ée]avis|terme|expiration|entr[ée]e en vigueur|r[ée]vision|imprévision|1195/i],
+  ['Litiges', /litige|tribunal|juridiction|m[ée]diation|arbitrage|loi applicable|comp[ée]tence territoriale|contentieux/i],
+  ['Parties et pouvoirs', /parties?|signataire|repr[ée]sent[ée]e? par|pouvoirs?|si[èe]ge social|\brcs\b|siren|siret|d[ée]nomm[ée]e?/i],
+  ['Conformité', /conformit|r[ée]glementation|\bloi\b|d[ée]cret|code civil|code de commerce|1171|l\.?\s?442|d[ée]s[ée]quilibre significatif|abusive|non [ée]crite/i],
+  ['Obligations', /obligation|s'engage|engagement|livraison|recette|d[ée]lai|prestation|exclusivit|non-concurrence|non-sollicitation|prix|paiement|facturation/i]
+];
+Object.assign(DOMAIN_META, {
+  'Trésorerie': { ic: '💧', c: '#3d9be0' }, 'Exploitation': { ic: '🏭', c: '#d1ad66' }, 'Investissement': { ic: '🏗️', c: '#b08a5a' },
+  'Endettement': { ic: '🏦', c: '#e2558a' }, 'Prévisionnel': { ic: '🔭', c: '#8b6cff' },
+  'Rémunération': { ic: '💶', c: '#d1ad66' }, 'Temps de travail': { ic: '⏱️', c: '#3d9be0' }, 'Contrat de travail': { ic: '📝', c: '#a07ce0' },
+  'Effectifs': { ic: '👥', c: '#ef8a3c' }, 'Formation': { ic: '🎓', c: '#3cb5ad' }, 'Santé-Sécurité': { ic: '🦺', c: '#e2c32f' },
+  'Dialogue social': { ic: '🗣️', c: '#e2558a' },
+  'Parties et pouvoirs': { ic: '🤝', c: '#7f9cc0' }, 'Obligations': { ic: '📌', c: '#d1ad66' }, 'Responsabilité': { ic: '🛡️', c: '#e5484d' },
+  'Durée et résiliation': { ic: '⏳', c: '#ef8a3c' }, 'Propriété intellectuelle': { ic: '💡', c: '#c06ad6' }, 'Données personnelles': { ic: '🔐', c: '#3d9be0' },
+  'Confidentialité': { ic: '🤫', c: '#5f7a99' }, 'Litiges': { ic: '⚖️', c: '#8b6cff' }, 'Conformité': { ic: '✅', c: '#5bbf62' }
+});
+const AI_RULES_COMMON = "Ne cite un article de loi, un texte ou une jurisprudence que si tu es certain de sa référence ; sinon décris la règle sans numéro.";
 const PROFILES = {
   collectivite: {
+    label: 'Municipaux / intercommunaux', calcDom: 'Financier', textDom: 'Gestion',
+    intro: (o, d) => `Tu es un analyste expérimenté en finances publiques locales (CGCT, nomenclatures M57/M14). Je te joins les documents préparatoires ${o ? 'au conseil de « ' + o + ' »' : 'à un conseil municipal ou communautaire'}${d ? ' (séance du ' + d + ')' : ''} :`,
+    missionHead: 'Mission : relire ces documents et lister les points à revoir avant la séance, en particulier :',
+    missions: [
+      '- erreurs de calcul : totaux, sous-totaux, pourcentages, reports de montants ;',
+      '- incohérences entre documents ou entre passages (montants, dates, intitulés, numéros) ;',
+      '- redites contenant des chiffres différents ;',
+      '- incohérences budgétaires : équilibre des sections, résultats reportés (R002, D001/R001), affectation du résultat, restes à réaliser, épargne brute et nette, capacité de désendettement ;',
+      '- fragilités juridiques de forme : visas et références, mentions obligatoires, quorum, numérotation des délibérations ;',
+      '- informations manquantes ou formulations ambiguës empêchant les élus de se prononcer en connaissance de cause.'],
     domains: DOMAINS_COLL, rules: DOMAIN_RULES_COLL,
     orgLabel: 'Collectivité', orgPh: 'Ex. Commune de Cordemais', dateLabel: 'Séance du conseil', dateWord: 'Séance du',
     coverSub: 'Contrôle des documents préparatoires au conseil', orgDefault: 'Documents du conseil'
   },
   general: {
+    label: 'Documents généraux', calcDom: 'Financier', textDom: 'Rédaction',
+    intro: (o, d) => `Tu es un auditeur documentaire rigoureux (contrôle de gestion, droit des contrats, qualité rédactionnelle). Je te joins des documents à relire${o ? ' pour le dossier « ' + o + ' »' : ''}${d ? ' (date de référence : ' + d + ')' : ''} :`,
+    missionHead: 'Mission : relire ces documents et lister les points à revoir avant leur validation ou leur signature, en particulier :',
+    missions: [
+      '- erreurs de calcul : totaux, sous-totaux, pourcentages, HT/TVA/TTC, quantités x prix unitaires, reports de montants ;',
+      "- incohérences internes ou entre documents : montants, dates, délais, noms, adresses, références, numéros d'articles ou d'annexes ;",
+      '- contradictions entre clauses, engagements, conditions ou délais ;',
+      '- redites contenant des chiffres ou des informations différentes ;',
+      '- risques juridiques ou contractuels : mentions obligatoires absentes, clauses ambiguës ou déséquilibrées, renvois erronés, annexes citées mais absentes ;',
+      '- informations manquantes, formulations ambiguës, erreurs de forme (numérotation, titres, renvois).'],
     domains: DOMAINS_GEN, rules: DOMAIN_RULES_GEN,
     orgLabel: 'Organisation / dossier', orgPh: 'Ex. Marché de rénovation école', dateLabel: 'Date de référence', dateWord: 'Date de référence :',
     coverSub: 'Contrôle de cohérence documentaire', orgDefault: 'Dossier documentaire'
+  },
+  financier: {
+    label: 'Documents financiers', calcDom: 'Comptable', textDom: 'Gestion',
+    intro: (o, d) => `Tu es un expert-comptable et analyste financier expérimenté (Plan comptable général français, analyse financière, fiscalité des entreprises, contrôle de gestion). Je te joins des documents financiers à contrôler${o ? ' concernant « ' + o + ' »' : ''}${d ? ' (date d\'arrêté ou de référence : ' + d + ')' : ''} :`,
+    missionHead: 'Mission : contrôler ces documents comme le ferait un réviseur avant validation ou présentation, en particulier :',
+    missions: [
+      '- contrôle arithmétique : totaux, sous-totaux, soldes intermédiaires de gestion, ratios, pourcentages, HT/TVA/TTC, reports d\'un tableau ou d\'une page à l\'autre ;',
+      '- cohérence entre états : bilan, compte de résultat, annexe, tableau de flux, budget ; équilibre actif/passif ; résultat de l\'exercice et affectation ; variation de trésorerie expliquée par les flux ;',
+      '- périodes et comparatifs : N / N-1, budget / réalisé, cohérence des dates d\'arrêté, des unités (€, k€, M€) et des arrondis ;',
+      '- indicateurs : EBE, CAF, BFR, endettement net, levier, couverture des frais financiers, capacité de remboursement ; signale toute dégradation non commentée ou tout commentaire contredit par les chiffres ;',
+      '- prévisionnels et plans de financement : réalisme et cohérence des hypothèses avec les chiffres, besoins de financement non couverts, sensibilité aux hypothèses clés ;',
+      '- risques comptables et fiscaux : provisions, dépréciations, amortissements, engagements hors bilan, TVA, échéances fiscales et sociales ;',
+      '- informations manquantes pour se prononcer (annexes, détail de postes significatifs, méthodes comptables).'],
+    domains: DOMAINS_FIN, rules: DOMAIN_RULES_FIN,
+    orgLabel: 'Entité / dossier', orgPh: 'Ex. HerculePro - comptes 2025', dateLabel: "Date d'arrêté / référence", dateWord: "Date d'arrêté :",
+    coverSub: 'Contrôle des documents financiers', orgDefault: 'Dossier financier'
+  },
+  rh: {
+    label: 'Documents RH', calcDom: 'Rémunération', textDom: 'Gestion',
+    intro: (o, d) => `Tu es un juriste en droit social et responsable RH expérimenté (Code du travail français, conventions collectives, paie). Je te joins des documents RH à contrôler${o ? ' pour « ' + o + ' »' : ''}${d ? ' (date de référence : ' + d + ')' : ''} :`,
+    missionHead: 'Mission : contrôler ces documents avant signature, diffusion ou application, en particulier :',
+    missions: [
+      '- convention collective applicable : identifie-la si possible et vérifie la cohérence des classifications, coefficients et minima ;',
+      '- rémunération : respect du SMIC et des minima conventionnels, calculs de paie (brut, net, primes, majorations, prorata, ancienneté), cohérence des montants entre documents ;',
+      '- temps de travail : durée, heures supplémentaires et complémentaires, temps partiel (répartition, mentions), forfait jours (accord collectif, suivi de la charge), repos et congés ;',
+      '- contrats : mentions obligatoires, période d\'essai et renouvellement, CDD (motif, terme, durée maximale, renouvellements), préavis ; clauses de non-concurrence (contrepartie financière, limites), mobilité, exclusivité, dédit-formation ;',
+      '- procédures : délais légaux (convocation, entretien préalable, notification), forme, motivation, information-consultation du CSE lorsqu\'elle est requise ;',
+      '- égalité de traitement, non-discrimination, données personnelles des salariés ;',
+      '- santé et sécurité : obligations de prévention, document unique ;',
+      '- incohérences de dates, noms, postes, classifications ou montants entre documents ; risques prud\'homaux.'],
+    domains: DOMAINS_RH, rules: DOMAIN_RULES_RH,
+    orgLabel: 'Entreprise / service', orgPh: 'Ex. HerculePro - service commercial', dateLabel: 'Date de référence', dateWord: 'Date de référence :',
+    coverSub: 'Contrôle des documents RH', orgDefault: 'Dossier RH'
+  },
+  juridique: {
+    label: 'Documents juridiques', calcDom: 'Obligations', textDom: 'Rédaction',
+    intro: (o, d) => `Tu es un avocat d'affaires expérimenté (droit français des contrats issu de la réforme de 2016, droit commercial, propriété intellectuelle, RGPD). Je te joins des documents juridiques à auditer${o ? ' (dossier « ' + o + ' »)' : ''}${d ? ' (date de référence : ' + d + ')' : ''} :`,
+    missionHead: 'Mission : auditer ces documents avant signature et lister les points à revoir, en particulier :',
+    missions: [
+      '- parties : identification complète, pouvoirs et qualité des signataires, objet et contrepartie clairs ;',
+      '- cohérence interne : définitions employées de façon constante, renvois entre articles et annexes, numérotation, hiérarchie entre contrat et annexes, annexes citées mais absentes ;',
+      '- obligations : précision, réciprocité, délais, conditions suspensives, critères de recette, obligations de moyens ou de résultat ;',
+      '- clauses sensibles : responsabilité et plafonds, pénalités, garanties, assurance, résiliation (motifs, préavis, effets), durée et reconduction tacite, exclusivité, non-concurrence, non-sollicitation, propriété intellectuelle (cession ou licence, étendue, durée, territoire, rémunération), confidentialité, force majeure, imprévision, cession du contrat, loi applicable et juridiction ;',
+      '- déséquilibre significatif, clauses potentiellement abusives ou réputées non écrites ;',
+      '- données personnelles : qualification des rôles, clauses de sous-traitance conformes au RGPD, transferts hors UE ;',
+      '- forme : dates, signatures, paraphes, nombre d\'exemplaires, mentions obligatoires ;',
+      '- formulations ambiguës sources de litige : propose pour chacune une reformulation courte dans le champ "recommandation".'],
+    domains: DOMAINS_JUR, rules: DOMAIN_RULES_JUR,
+    orgLabel: 'Dossier / parties', orgPh: 'Ex. Contrat AlloTools / HerculePro', dateLabel: 'Date de référence', dateWord: 'Date de référence :',
+    coverSub: 'Contrôle juridique des documents', orgDefault: 'Dossier juridique'
   }
 };
 let MODE = 'collectivite', DOMAINS = DOMAINS_COLL, DOMAIN_RULES = DOMAIN_RULES_COLL;
@@ -368,8 +487,9 @@ function setMode(m) { MODE = PROFILES[m] ? m : 'collectivite'; DOMAINS = PROFILE
 function classifyDomain(f, docName = '') {
   const txt = [f.title, f.detail, ...(f.refs || []).map(r => r.extract + ' ' + r.doc), docName].join(' ');
   for (const [d, re] of DOMAIN_RULES) if (re.test(txt)) return d;
-  if (['calc', 'evol', 'arith', 'sens', 'incoh'].includes(f.cat)) return 'Financier';
-  return MODE === 'general' && ['redite', 'date'].includes(f.cat) ? 'Rédaction' : 'Gestion';
+  const P = PROFILES[MODE];
+  if (['calc', 'evol', 'arith', 'sens', 'incoh'].includes(f.cat)) return P.calcDom;
+  return ['redite', 'date'].includes(f.cat) ? P.textDom : 'Gestion';
 }
 function normDomain(s) {
   if (!s) return null;
@@ -816,7 +936,7 @@ function applyMode(m, reclass) {
   if (reclass && state.findings.length) {
     state.findings.forEach(f => { if (f.cat !== 'ia' || !DOMAINS.includes(f.dom)) f.dom = classifyDomain(f); });
     state.filter = 'all'; renderReport();
-    toast('Thèmes recalculés pour « ' + (MODE === 'general' ? 'Documents généraux' : 'Municipaux / intercommunaux') + ' »');
+    toast('Thèmes recalculés pour « ' + PROFILES[MODE].label + ' »');
   }
 }
 document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => { if (b.dataset.m !== MODE) applyMode(b.dataset.m, true); });
@@ -929,36 +1049,19 @@ function buildPrompt() {
   promptMap = auto.map(f => f.id);
   const lines = [];
   const dateFr = seance ? new Date(seance).toLocaleDateString('fr-FR') : '';
-  if (MODE === 'general') {
-    lines.push(`Tu es un auditeur documentaire rigoureux (contrôle de gestion, droit des contrats, qualité rédactionnelle). Je te joins des documents à relire${coll ? ' pour le dossier « ' + coll + ' »' : ''}${dateFr ? ' (date de référence : ' + dateFr + ')' : ''} :`);
-    docs.forEach(d => lines.push(`- ${d.name} (${d.numPages} p.)`));
-    lines.push('', 'Mission : relire ces documents et lister les points à revoir avant leur validation ou leur signature, en particulier :',
-      '- erreurs de calcul : totaux, sous-totaux, pourcentages, HT/TVA/TTC, quantités x prix unitaires, reports de montants ;',
-      '- incohérences internes ou entre documents : montants, dates, délais, noms, adresses, références, numéros d\'articles ou d\'annexes ;',
-      '- contradictions entre clauses, engagements, conditions ou délais ;',
-      '- redites contenant des chiffres ou des informations différentes ;',
-      '- risques juridiques ou contractuels : mentions obligatoires absentes, clauses ambiguës ou déséquilibrées, renvois erronés, annexes citées mais absentes ;',
-      '- informations manquantes, formulations ambiguës, erreurs de forme (numérotation, titres, renvois).');
-  } else {
-  lines.push(`Tu es un analyste expérimenté en finances publiques locales (CGCT, nomenclatures M57/M14). Je te joins les documents préparatoires ${coll ? 'au conseil de « ' + coll + ' »' : 'à un conseil municipal ou communautaire'}${dateFr ? ' (séance du ' + dateFr + ')' : ''} :`);
+  const P = PROFILES[MODE];
+  lines.push(P.intro(coll, dateFr));
   docs.forEach(d => lines.push(`- ${d.name} (${d.numPages} p.)`));
-  lines.push('', 'Mission : relire ces documents et lister les points à revoir avant la séance, en particulier :',
-    '- erreurs de calcul : totaux, sous-totaux, pourcentages, reports de montants ;',
-    '- incohérences entre documents ou entre passages (montants, dates, intitulés, numéros) ;',
-    '- redites contenant des chiffres différents ;',
-    '- incohérences budgétaires : équilibre des sections, résultats reportés (R002, D001/R001), affectation du résultat, restes à réaliser, épargne brute et nette, capacité de désendettement ;',
-    '- fragilités juridiques de forme : visas et références, mentions obligatoires, quorum, numérotation des délibérations ;',
-    '- informations manquantes ou formulations ambiguës empêchant les élus de se prononcer en connaissance de cause.');
-  }
+  lines.push('', P.missionHead, ...P.missions);
   if (auto.length) {
     lines.push('', "Une première analyse automatique a relevé ces points. Pour chacun, confirme-le ou indique s'il s'agit d'un faux positif :");
     auto.forEach((f, i) => lines.push(`A${i + 1}. ${f.title} — ${f.refs.map(r => r.doc + ' p.' + r.page).join(' ; ')}`));
   }
-  lines.push('', "Règles : ne signale que ce que tu peux justifier par le texte des documents, cite toujours le document et la page, reste factuel et concis. N'invente aucun chiffre.",
+  lines.push('', "Règles : ne signale que ce que tu peux justifier par le texte des documents, cite toujours le document et la page, reste factuel et concis. N'invente aucun chiffre. " + AI_RULES_COMMON + " Ignore les en-têtes, pieds de page et numéros de page.",
     '', 'Réponds en deux parties :',
     '1) Une synthèse en 5 lignes maximum.',
     '2) Un bloc ```json contenant un tableau d\'objets de la forme :',
-    '{"titre": "court", "explication": "1 à 3 phrases", "priorite": "haute|moyenne|faible", "document": "nom du fichier", "page": 3, "extrait": "citation courte du passage", "statut": "nouveau|confirme|faux_positif", "ref_auto": "A2 ou null", "domaine": "un parmi : ' + DOMAINS.join(', ') + '"}',
+    '{"titre": "court", "explication": "1 à 3 phrases", "priorite": "haute|moyenne|faible", "document": "nom du fichier", "page": 3, "extrait": "citation courte du passage", "statut": "nouveau|confirme|faux_positif", "ref_auto": "A2 ou null", "domaine": "un parmi : ' + DOMAINS.join(', ') + '", "recommandation": "correction ou action suggérée, courte (facultatif)"}',
     'Les points automatiques confirmés ou infirmés doivent figurer avec leur ref_auto.');
   return lines.join('\n');
 }
@@ -1040,7 +1143,7 @@ $('#importBtn').onclick = () => {
     const nf = {
       id: nextId++, include: true, note: '', cat: 'ia', sev,
       title: String(o.titre || 'Point relevé par ' + ai), src: ai,
-      detail: String(o.explication || ''),
+      detail: String(o.explication || '') + (o.recommandation ? ' Recommandation : ' + String(o.recommandation) : ''),
       refs: [{ doc: String(o.document || 'Document'), page: o.page ?? '', extract: String(o.extrait || '').slice(0, 300) }]
     };
     nf.dom = normDomain(o.domaine) || classifyDomain(nf);
