@@ -295,8 +295,9 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.14.1', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.15.0', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.15.0', d: '06/10/2026', items: ['PDF : accès par priorité (haute, à vérifier, mineurs) en vignettes cliquables', 'Index des points du plus important au moins important, chaque ligne menant au détail', 'Signets « Par priorité »'] },
   { v: '1.14.1', d: '06/10/2026', items: ['Correction : export PDF en erreur quand une remarque longue est coupée sur deux pages'] },
   { v: '1.14.0', d: '06/10/2026', items: ['PDF : présentation sobre sur fond blanc (titres serif, filets or et bordeaux), sans logo ni bandeau sombre'] },
   { v: '1.13.1', d: '06/10/2026', items: ['Gemini retiré ; 4e choix « Copier le prompt » pour utiliser n\'importe quelle autre IA'] },
@@ -1448,9 +1449,74 @@ async function exportPdf() {
     y += Math.ceil(used.length / perRow) * (th + gap) + 4;
   }
 
+  /* ===== Accès par priorité : vignettes + index du plus important au moins important ===== */
+  const SEVS = [['haute', 'Priorité haute', [229, 72, 77]], ['moyenne', 'À vérifier', [214, 140, 30]], ['faible', 'Mineurs', [140, 140, 140]]];
+  const numOf = f => sel.indexOf(f) + 1;
+  const prioTiles = [], prioAnchors = {}, idxRows = [];
+  const presentSevs = SEVS.filter(([k]) => sel.some(f => f.sev === k));
+  if (presentSevs.length) {
+    y += 2;
+    doc.setTextColor(...PDFC.ink); doc.setFont('times', 'bold'); doc.setFontSize(13); doc.text('Accès par priorité', M, y);
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(130, 130, 130);
+    doc.text('Du plus important au moins important', W - M, y, { align: 'right' }); y += 4;
+    const pw = (W - 2 * M - 2 * 4.3) / 3, ph = 14;
+    SEVS.forEach(([k, lbl, c], i) => {
+      const n = sel.filter(f => f.sev === k).length, x = M + i * (pw + 4.3);
+      doc.setFillColor(...c.map(v => Math.round(v + (255 - v) * (n ? 0.88 : 0.95)))); doc.setDrawColor(...c.map(v => n ? v : Math.round(v + (255 - v) * 0.6))); doc.setLineWidth(0.4);
+      doc.roundedRect(x, y, pw, ph, 2, 2, 'FD');
+      doc.setFillColor(...c); doc.circle(x + 5, y + ph / 2, 1.6, 'F');
+      doc.setTextColor(...c.map(v => Math.round(v * 0.7))); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+      doc.text(pdfSafe(lbl.toUpperCase()), x + 9, y + 6);
+      doc.setTextColor(...PDFC.ink); doc.setFont('times', 'bold'); doc.setFontSize(14); doc.text(String(n), x + 9, y + 11.6);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...PDFC.gray);
+      doc.text(n ? `point${n > 1 ? 's' : ''}  >` : 'aucun', x + 9 + doc.getTextWidth(String(n)) * 1.9 + 3, y + 11.4);
+      if (n) prioTiles.push({ k, x, y, w: pw, h: ph });
+    });
+    y += ph + 9;
+    // index par priorité (chaque ligne renvoie au détail dans sa section thématique)
+    const prioRoot = doc.outline.add(null, 'Par priorité', { pageNumber: curPage() });
+    for (const [k, lbl, c] of presentSevs) {
+      const items = sel.filter(f => f.sev === k);
+      if (y > PH - 45) { doc.addPage(); y = 18; }
+      doc.setFillColor(...c); doc.rect(M, y + 1, 1.4, 7, 'F');
+      doc.setTextColor(...c.map(v => Math.round(v * 0.75))); doc.setFont('times', 'bold'); doc.setFontSize(12.5);
+      doc.text(pdfSafe(lbl), M + 4.5, y + 6.5);
+      const lw = doc.getTextWidth(pdfSafe(lbl));
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...PDFC.gray);
+      doc.text(`${items.length} point${items.length > 1 ? 's' : ''}`, M + 8 + lw, y + 6.5);
+      doc.setFontSize(8); doc.setTextColor(...PDFC.light); doc.text('^ Retour à la synthèse', W - M, y + 6.5, { align: 'right' });
+      doc.link(W - M - 35, y, 35, 9, { pageNumber: SYN, top: sumTop });
+      doc.setDrawColor(...PDFC.hair); doc.setLineWidth(0.25); doc.line(M, y + 9.5, W - M, y + 9.5);
+      prioAnchors[k] = { page: curPage(), top: Math.max(0, y - 4) };
+      doc.outline.add(prioRoot, `${lbl} (${items.length})`, { pageNumber: curPage() });
+      y += 11;
+      const byN = {}; items.forEach(f => byN[numOf(f)] = f);
+      doc.autoTable({
+        startY: y, margin: { left: M, right: M, bottom: 18 },
+        head: [['N°', 'Thème', 'Point', 'Référence']],
+        body: items.map(f => [String(numOf(f)), pdfSafe(f.dom), pdfSafe(f.title), pdfSafe(f.refs.map(r => `${r.doc}${r.page ? ', p. ' + r.page : ''}`).join(' ; ') || '-')]),
+        styles: { font: 'helvetica', fontSize: 8, cellPadding: 1.6, valign: 'top', lineColor: [228, 222, 216], lineWidth: 0.15, textColor: PDFC.ink },
+        headStyles: { fillColor: [246, 242, 238], textColor: PDFC.gray, fontStyle: 'bold', fontSize: 7.5 },
+        columnStyles: { 0: { cellWidth: 9, halign: 'center', fontStyle: 'bold' }, 1: { cellWidth: 30, fontSize: 7.4 }, 3: { cellWidth: 46, textColor: PDFC.gray, fontSize: 7.4 } },
+        didParseCell: cc => {
+          if (cc.section !== 'body') return;
+          const f = Array.isArray(cc.row.raw) && byN[parseInt(cc.row.raw[0], 10)]; if (!f) return;
+          if (cc.column.index === 1) cc.cell.styles.textColor = hex(DOMAIN_META[f.dom] ? DOMAIN_META[f.dom].c : '#666666').map(v => Math.round(v * 0.75));
+          if (cc.column.index === 2) cc.cell.styles.textColor = [25, 90, 190];
+        },
+        didDrawCell: cc => {
+          if (cc.section !== 'body' || cc.column.index !== 2) return;
+          const nn = Array.isArray(cc.row.raw) ? parseInt(cc.row.raw[0], 10) : 0;
+          if (nn) idxRows.push({ num: nn, page: curPage(), x: M, y: cc.cell.y, w: W - 2 * M, h: cc.cell.height });
+        }
+      });
+      y = doc.lastAutoTable.finalY + 8;
+    }
+    y += 2;
+  }
+
   if (sel.length) {
     const sevCol = { haute: [229, 72, 77], moyenne: [214, 140, 30], faible: [140, 140, 140] };
-    const numOf = f => sel.indexOf(f) + 1;
     for (const d of used) {
       const items = sel.filter(f => f.dom === d), col = hex(DOMAIN_META[d].c);
       if (y > PH - 55) { doc.addPage(); y = 18; }
@@ -1525,6 +1591,9 @@ async function exportPdf() {
     const last = curPage();
     doc.setPage(SYN);
     tiles.forEach(tl => { const a = anchors[tl.d]; if (a) doc.link(tl.x, tl.y, tl.w, tl.h, { pageNumber: a.page, top: a.top }); });
+    prioTiles.forEach(tl => { const a = prioAnchors[tl.k]; if (a) doc.link(tl.x, tl.y, tl.w, tl.h, { pageNumber: a.page, top: a.top }); });
+    // lignes de l'index par priorité -> détail du point dans sa section
+    idxRows.forEach(r => { const p = rowPos[r.num]; if (!p) return; doc.setPage(r.page); doc.link(r.x, r.y, r.w, r.h, { pageNumber: p.page, top: Math.max(0, p.y - 12) }); });
     doc.setPage(last);
   }
 
