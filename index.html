@@ -243,7 +243,7 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 <dialog id="memoDlg" class="wide">
   <h3>Mémo de synthèse</h3>
   <ol>
-    <li>Ouvrez l'IA de votre choix : le prompt « mémo » est copié (et prérempli sauf pour Gemini).</li>
+    <li>Ouvrez Claude, ChatGPT ou Grok (prompt déjà saisi), ou « Copier le prompt » pour une autre IA.</li>
     <li><b>Joignez les PDF</b> puis envoyez.</li>
     <li>Collez la réponse ci-dessous et générez le mémo PDF (1 à 2 pages).</li>
   </ol>
@@ -251,8 +251,8 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
   <div class="ai-grid" style="margin:10px 0 8px">
     <button class="ai-btn open-ai" data-src="memoPrompt" data-ai="Claude"><span class="ai-logo" data-id="claude" data-ini="C"></span><span>Claude</span></button>
     <button class="ai-btn open-ai" data-src="memoPrompt" data-ai="ChatGPT"><span class="ai-logo" data-id="chatgpt" data-ini="G"></span><span>ChatGPT</span></button>
-    <button class="ai-btn open-ai" data-src="memoPrompt" data-ai="Gemini"><span class="ai-logo" data-id="gemini" data-ini="G"></span><span>Gemini</span></button>
     <button class="ai-btn open-ai" data-src="memoPrompt" data-ai="Grok"><span class="ai-logo" data-id="grok" data-ini="X"></span><span>Grok</span></button>
+    <button class="ai-btn copy-ai" data-src="memoPrompt" title="Copier le prompt pour une autre IA"><span class="ai-logo fallback">📋</span><span>Copier le prompt</span></button>
   </div>
   <label class="f" style="margin-top:8px">Réponse de l'IA (le mémo)
     <textarea id="memoAnswer" rows="7" placeholder="Collez ici le mémo rédigé par l'IA…"></textarea>
@@ -268,7 +268,7 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 <dialog id="claudeDlg" class="wide">
   <h3>Approfondir avec une IA</h3>
   <ol>
-    <li>Ouvrez l'IA de votre choix : le prompt est copié dans le presse-papier et, pour Claude, ChatGPT et Grok, déjà saisi dans la conversation (pour Gemini, collez-le).</li>
+    <li>Ouvrez Claude, ChatGPT ou Grok : le prompt est déjà saisi (et copié). Pour une autre IA, utilisez « Copier le prompt » et collez-le.</li>
     <li><b>Joignez les PDF</b> avant d'envoyer — un lien ne peut pas transporter de fichiers.</li>
     <li>Copiez toute la réponse de l'IA et collez-la dans le cadre du bas, puis « Importer ».</li>
   </ol>
@@ -276,12 +276,12 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
   <div class="ai-grid" style="margin:10px 0 8px">
     <button class="ai-btn open-ai" data-src="promptTxt" data-ai="Claude"><span class="ai-logo" data-id="claude" data-ini="C"></span><span>Claude</span></button>
     <button class="ai-btn open-ai" data-src="promptTxt" data-ai="ChatGPT"><span class="ai-logo" data-id="chatgpt" data-ini="G"></span><span>ChatGPT</span></button>
-    <button class="ai-btn open-ai" data-src="promptTxt" data-ai="Gemini"><span class="ai-logo" data-id="gemini" data-ini="G"></span><span>Gemini</span></button>
     <button class="ai-btn open-ai" data-src="promptTxt" data-ai="Grok"><span class="ai-logo" data-id="grok" data-ini="X"></span><span>Grok</span></button>
+    <button class="ai-btn copy-ai" data-src="promptTxt" title="Copier le prompt pour une autre IA"><span class="ai-logo fallback">📋</span><span>Copier le prompt</span></button>
   </div>
-  <div class="row" style="margin:0 0 16px"><button class="btn sm" id="copyPromptBtn">📋 Copier le prompt seul</button></div>
+  <div style="height:8px"></div>
   <label class="f">Réponse de
-    <select id="aiSrc" style="font:inherit;color:var(--ink);background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;max-width:180px"><option>Claude</option><option>ChatGPT</option><option>Gemini</option><option>Grok</option></select>
+    <select id="aiSrc" style="font:inherit;color:var(--ink);background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;max-width:180px"><option>Claude</option><option>ChatGPT</option><option>Grok</option><option>Autre IA</option></select>
   </label>
   <label class="f" style="margin-top:8px">Réponse complète
     <textarea id="answerTxt" rows="6" placeholder="Collez ici la réponse complète (avec le bloc JSON)…"></textarea>
@@ -295,8 +295,9 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.13.0', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.13.1', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.13.1', d: '06/10/2026', items: ['Gemini retiré ; 4e choix « Copier le prompt » pour utiliser n\'importe quelle autre IA'] },
   { v: '1.13.0', d: '06/10/2026', items: ['Bouton « Résumer seulement dans un mémo » : prompt de synthèse adapté au type de documents, mémo PDF d\'une à deux pages'] },
   { v: '1.12.0', d: '06/10/2026', items: ['Trois nouveaux types : notarial et immobilier, urbanisme et technique, informatique', 'Prompts IA spécialisés (notaire, urbaniste / bureau d\'études, architecte SI) et thèmes dédiés'] },
   { v: '1.11.0', d: '06/10/2026', items: ['Trois nouveaux types de documents : financiers, RH, juridiques', 'Prompts IA spécialisés (expert-comptable, droit social, avocat d\'affaires) et thèmes dédiés à chaque type', 'Champ « recommandation » repris de la réponse de l\'IA'] },
@@ -1222,7 +1223,7 @@ $('#claudeBtn').onclick = () => {
 };
 const MAX_URL = 7000;
 /* Logos : déposez les fichiers officiels dans logos/ (claude, chatgpt, gemini, grok en .svg, .png ou .webp) */
-document.querySelectorAll('.ai-logo').forEach(el => {
+document.querySelectorAll('.ai-logo[data-id]').forEach(el => {
   const exts = ['svg', 'png', 'webp'];
   const tryExt = i => {
     if (i >= exts.length) { el.classList.add('fallback'); el.textContent = el.dataset.ini; return; }
@@ -1233,8 +1234,14 @@ document.querySelectorAll('.ai-logo').forEach(el => {
   };
   tryExt(0);
 });
-const AI_URL = { Claude: 'https://claude.ai/new', ChatGPT: 'https://chatgpt.com/', Gemini: 'https://gemini.google.com/app', Grok: 'https://grok.com/' };
-const AI_PREFILL = { Claude: true, ChatGPT: true, Gemini: false, Grok: true };
+const AI_URL = { Claude: 'https://claude.ai/new', ChatGPT: 'https://chatgpt.com/', Grok: 'https://grok.com/' };
+const AI_PREFILL = { Claude: true, ChatGPT: true, Grok: true };
+document.querySelectorAll('.copy-ai').forEach(b => b.onclick = async () => {
+  const ta = $('#' + b.dataset.src);
+  const ok = await copyText(ta.value, ta);
+  if (ta.id === 'promptTxt') $('#aiSrc').value = 'Autre IA';
+  toast(ok ? 'Prompt copié ✔ Collez-le dans votre IA et joignez les PDF' : 'Sélectionnez le texte et copiez-le manuellement');
+});
 document.querySelectorAll('.open-ai').forEach(b => b.onclick = async () => {
   const ai = b.dataset.ai, base = AI_URL[ai];
   const srcTa = $('#' + (b.dataset.src || 'promptTxt'));
@@ -1252,7 +1259,7 @@ document.querySelectorAll('.open-ai').forEach(b => b.onclick = async () => {
     toast(copied ? `${why} : collez-le (déjà copié), joignez les PDF` : `${why} : copiez-le manuellement`);
   }
 });
-$('#copyPromptBtn').onclick = async () => {
+if ($('#copyPromptBtn')) $('#copyPromptBtn').onclick = async () => {
   const ok = await copyText($('#promptTxt').value, $('#promptTxt'));
   toast(ok ? 'Prompt copié ✔' : 'Sélectionnez le texte et copiez-le manuellement');
 };
