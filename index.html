@@ -112,6 +112,11 @@ dialog{background:var(--card);color:var(--ink);border:1px solid var(--line);bord
 dialog::backdrop{background:rgba(0,0,0,.6)}
 dialog h3{color:var(--brass);margin-bottom:10px}
 dialog ul{padding-left:18px;color:var(--ink2)}
+dialog.wide{max-width:720px}
+dialog ol{padding-left:20px;color:var(--ink2);margin:6px 0 12px}
+dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
+.find.ia .tag{background:#2b2240;border-color:#5b4a8a;color:#cbbcff}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--brass);color:#1b1206;font-weight:600;padding:10px 18px;border-radius:999px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 .spin{display:inline-block;width:16px;height:16px;border:2px solid #fff6;border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (max-width:560px){
@@ -175,6 +180,7 @@ dialog ul{padding-left:18px;color:var(--ink2)}
       <p class="muted">Analyse automatique par règles : chaque point est une alerte à vérifier, pas une certitude. Décochez ceux qui ne sont pas pertinents, ajoutez vos commentaires, ils seront repris dans le PDF.</p>
       <div class="sticky-actions">
         <button class="btn" id="allBtn">Tout cocher / décocher</button>
+        <button class="btn" id="claudeBtn">🤖 Approfondir avec Claude</button>
         <button class="btn brass" id="pdfBtn">⬇ Exporter en PDF</button>
       </div>
     </section>
@@ -188,10 +194,38 @@ dialog ul{padding-left:18px;color:var(--ink2)}
   <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn sm" onclick="this.closest('dialog').close()">Fermer</button></div>
 </dialog>
 
+<dialog id="claudeDlg" class="wide">
+  <h3>Approfondir avec Claude</h3>
+  <ol>
+    <li>« Ouvrir dans Claude » : une nouvelle conversation s'ouvre avec le prompt déjà saisi (il est aussi copié dans le presse-papier).</li>
+    <li><b>Joignez les PDF</b> dans Claude avant d'envoyer — un lien ne peut pas transporter de fichiers.</li>
+    <li>Copiez toute la réponse de Claude et collez-la dans le cadre du bas, puis « Importer ».</li>
+  </ol>
+  <textarea id="promptTxt" rows="7" readonly></textarea>
+  <div class="row" style="margin:8px 0 16px">
+    <button class="btn primary sm" id="openClaudeBtn">↗ Ouvrir dans Claude</button>
+    <button class="btn sm" id="copyPromptBtn">📋 Copier le prompt</button>
+  </div>
+  <label class="f">Réponse de Claude
+    <textarea id="answerTxt" rows="6" placeholder="Collez ici la réponse complète (avec le bloc JSON)…"></textarea>
+  </label>
+  <p class="muted" id="importMsg" style="min-height:1.2em;margin:6px 0 0"></p>
+  <div class="row" style="justify-content:flex-end;margin-top:10px">
+    <button class="btn sm" onclick="this.closest('dialog').close()">Fermer</button>
+    <button class="btn brass sm" id="importBtn">Importer la réponse</button>
+  </div>
+</dialog>
+
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.0.0', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.2.0', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.2.0', d: '06/10/2026', items: [
+    '« Ouvrir dans Claude » : le prompt est prérempli via l\'URL claude.ai/new?q= (repli sur le presse-papier si trop long)'] },
+  { v: '1.1.0', d: '06/10/2026', items: [
+    'Bouton « Approfondir avec Claude » : prompt prêt à coller avec le contexte et les points détectés',
+    'Import de la réponse de Claude : nouveaux points ajoutés au rapport, faux positifs décochés, points confirmés annotés',
+    'Étiquette « Claude » dans le rapport et le PDF'] },
   { v: '1.0.0', d: '06/10/2026', items: [
     'Première version : import multi-PDF, extraction locale (pdf.js)',
     'Contrôles : totaux de tableaux, évolutions en %, opérations écrites, sens hausse/baisse, incohérences entre passages, redites avec écart, dates',
@@ -206,7 +240,8 @@ const CATS = {
   sens:   'Sens de variation',
   incoh:  'Incohérence de montant',
   redite: 'Redite avec écart',
-  date:   'Date'
+  date:   'Date',
+  ia:     'Analyse Claude'
 };
 const SEV_ORDER = { haute: 0, moyenne: 1, faible: 2 };
 
@@ -671,7 +706,7 @@ function renderReport() {
     .map(([k, l]) => `<button class="chip ${state.filter === k ? 'on' : ''}" data-k="${k}">${esc(l)}</button>`).join('');
   $('#chips').querySelectorAll('.chip').forEach(b => b.onclick = () => { state.filter = b.dataset.k; renderReport(); });
   const list = F.filter(f => state.filter === 'all' || f.cat === state.filter);
-  $('#findings').innerHTML = list.length ? list.map(f => `<article class="find ${f.sev} ${f.include ? '' : 'off'}" data-id="${f.id}">
+  $('#findings').innerHTML = list.length ? list.map(f => `<article class="find ${f.sev} ${f.cat === 'ia' ? 'ia' : ''} ${f.include ? '' : 'off'}" data-id="${f.id}">
       <div class="hd"><input type="checkbox" ${f.include ? 'checked' : ''} title="Inclure dans le rapport">
         <div class="t">${esc(f.title)}</div><span class="tag">${CATS[f.cat]}</span><span class="sev">${f.sev}</span></div>
       <div class="d">${esc(f.detail)}</div>
@@ -685,6 +720,107 @@ function renderReport() {
     el.querySelector('textarea').oninput = e => f.note = e.target.value;
   });
 }
+/* ---------- Claude (copier / importer) ---------- */
+let promptMap = [];
+function buildPrompt() {
+  const coll = $('#fColl').value.trim(), seance = $('#fDate').value;
+  const docs = state.docs.filter(d => d.pages.length);
+  const auto = state.findings.filter(f => f.cat !== 'ia');
+  promptMap = auto.map(f => f.id);
+  const lines = [];
+  lines.push(`Tu es un analyste expérimenté en finances publiques locales (CGCT, nomenclatures M57/M14). Je te joins les documents préparatoires ${coll ? 'au conseil de « ' + coll + ' »' : 'à un conseil municipal'}${seance ? ' (séance du ' + new Date(seance).toLocaleDateString('fr-FR') + ')' : ''} :`);
+  docs.forEach(d => lines.push(`- ${d.name} (${d.numPages} p.)`));
+  lines.push('', 'Mission : relire ces documents et lister les points à revoir avant la séance, en particulier :',
+    '- erreurs de calcul : totaux, sous-totaux, pourcentages, reports de montants ;',
+    '- incohérences entre documents ou entre passages (montants, dates, intitulés, numéros) ;',
+    '- redites contenant des chiffres différents ;',
+    '- incohérences budgétaires : équilibre des sections, résultats reportés (R002, D001/R001), affectation du résultat, restes à réaliser, épargne brute et nette, capacité de désendettement ;',
+    '- fragilités juridiques de forme : visas et références, mentions obligatoires, quorum, numérotation des délibérations ;',
+    '- informations manquantes ou formulations ambiguës empêchant les élus de se prononcer en connaissance de cause.');
+  if (auto.length) {
+    lines.push('', "Une première analyse automatique a relevé ces points. Pour chacun, confirme-le ou indique s'il s'agit d'un faux positif :");
+    auto.forEach((f, i) => lines.push(`A${i + 1}. ${f.title} — ${f.refs.map(r => r.doc + ' p.' + r.page).join(' ; ')}`));
+  }
+  lines.push('', "Règles : ne signale que ce que tu peux justifier par le texte des documents, cite toujours le document et la page, reste factuel et concis. N'invente aucun chiffre.",
+    '', 'Réponds en deux parties :',
+    '1) Une synthèse en 5 lignes maximum.',
+    '2) Un bloc ```json contenant un tableau d\'objets de la forme :',
+    '{"titre": "court", "explication": "1 à 3 phrases", "priorite": "haute|moyenne|faible", "document": "nom du fichier", "page": 3, "extrait": "citation courte du passage", "statut": "nouveau|confirme|faux_positif", "ref_auto": "A2 ou null"}',
+    'Les points automatiques confirmés ou infirmés doivent figurer avec leur ref_auto.');
+  return lines.join('\n');
+}
+function toast(msg) {
+  const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg;
+  document.body.appendChild(el); setTimeout(() => el.remove(), 2200);
+}
+async function copyText(txt, ta) {
+  try { await navigator.clipboard.writeText(txt); return true; }
+  catch (e) { ta.focus(); ta.select(); try { return document.execCommand('copy'); } catch (e2) { return false; } }
+}
+$('#claudeBtn').onclick = () => {
+  $('#promptTxt').value = buildPrompt();
+  $('#importMsg').textContent = '';
+  $('#claudeDlg').showModal();
+};
+const MAX_URL = 7000;
+$('#openClaudeBtn').onclick = async () => {
+  const p = $('#promptTxt').value;
+  const copied = await copyText(p, $('#promptTxt'));
+  const q = encodeURIComponent(p);
+  if (q.length <= MAX_URL) {
+    window.open('https://claude.ai/new?q=' + q, '_blank', 'noopener');
+    toast('Joignez les PDF dans Claude puis envoyez');
+  } else {
+    window.open('https://claude.ai/new', '_blank', 'noopener');
+    toast(copied ? 'Prompt trop long pour le lien : collez-le (déjà copié)' : 'Prompt trop long : copiez-le manuellement');
+  }
+};
+$('#copyPromptBtn').onclick = async () => {
+  const ok = await copyText($('#promptTxt').value, $('#promptTxt'));
+  toast(ok ? 'Prompt copié ✔' : 'Sélectionnez le texte et copiez-le manuellement');
+};
+function parseAnswer(txt) {
+  let m = txt.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  let src = m ? m[1] : null;
+  if (!src) { const a = txt.indexOf('['), b = txt.lastIndexOf(']'); if (a >= 0 && b > a) src = txt.slice(a, b + 1); }
+  if (!src) throw new Error('Aucun bloc JSON trouvé dans la réponse.');
+  const data = JSON.parse(src.trim());
+  if (!Array.isArray(data)) throw new Error("Le JSON n'est pas un tableau.");
+  return data;
+}
+$('#importBtn').onclick = () => {
+  const msg = $('#importMsg');
+  let data;
+  try { data = parseAnswer($('#answerTxt').value); }
+  catch (e) { msg.style.color = 'var(--high)'; msg.textContent = '⚠ ' + e.message + ' Vérifiez que toute la réponse a été collée.'; return; }
+  state.findings = state.findings.filter(f => f.cat !== 'ia');
+  let nNew = 0, nConf = 0, nFp = 0, nextId = Math.max(0, ...state.findings.map(f => f.id)) + 1;
+  for (const o of data) {
+    const statut = String(o.statut || 'nouveau').toLowerCase();
+    const ref = String(o.ref_auto || '').match(/A?(\d+)/i);
+    const target = ref ? state.findings.find(f => f.id === promptMap[+ref[1] - 1]) : null;
+    if (target && /faux/.test(statut)) {
+      target.include = false; target.note = ('Claude : faux positif. ' + (o.explication || '')).trim(); nFp++; continue;
+    }
+    if (target && /confirm/.test(statut)) {
+      target.note = ('Confirmé par Claude. ' + (o.explication || '')).trim(); nConf++; continue;
+    }
+    const sev = ['haute', 'moyenne', 'faible'].includes(String(o.priorite).toLowerCase()) ? String(o.priorite).toLowerCase() : 'moyenne';
+    state.findings.push({
+      id: nextId++, include: true, note: '', cat: 'ia', sev,
+      title: String(o.titre || 'Point relevé par Claude'),
+      detail: String(o.explication || ''),
+      refs: [{ doc: String(o.document || 'Document'), page: o.page ?? '', extract: String(o.extrait || '').slice(0, 300) }]
+    });
+    nNew++;
+  }
+  state.findings.sort((a, b) => SEV_ORDER[a.sev] - SEV_ORDER[b.sev] || (a.cat === 'ia') - (b.cat === 'ia'));
+  renderReport();
+  msg.style.color = 'var(--ok)';
+  msg.textContent = `✔ ${nNew} nouveau(x) point(s), ${nConf} confirmé(s), ${nFp} faux positif(s) décoché(s).`;
+  toast('Réponse de Claude intégrée');
+};
+
 $('#allBtn').onclick = () => { const v = !state.findings.every(f => f.include); state.findings.forEach(f => f.include = v); renderReport(); };
 
 /* ---------- Export PDF ---------- */
@@ -725,8 +861,8 @@ $('#pdfBtn').onclick = () => {
       head: [['N°', 'Point à revoir', 'Référence', 'Priorité']],
       body: sel.map((f, i) => [
         String(i + 1),
-        pdfSafe(`${f.title}\n${f.detail}` + (f.note.trim() ? `\n> Commentaire : ${f.note.trim()}` : '')),
-        pdfSafe(f.refs.map(r => `${r.doc}, p. ${r.page}`).join('\n')),
+        pdfSafe(`${f.cat === 'ia' ? '[Claude] ' : ''}${f.title}\n${f.detail}` + (f.note.trim() ? `\n> Commentaire : ${f.note.trim()}` : '')),
+        pdfSafe(f.refs.map(r => `${r.doc}${r.page ? ', p. ' + r.page : ''}`).join('\n') || '-'),
         f.sev.toUpperCase()
       ]),
       styles: { font: 'helvetica', fontSize: 8.6, cellPadding: 2.2, valign: 'top', lineColor: [220, 214, 210], lineWidth: 0.2 },
