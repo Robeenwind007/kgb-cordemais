@@ -1,0 +1,13 @@
+Logos des boutons IA de KGB Doc
+================================
+Déposez ici les logos officiels, nommés exactement :
+  claude.svg   chatgpt.svg   gemini.svg   grok.svg
+(.png ou .webp acceptés aussi, carré de préférence, fond transparent)
+
+Sources officielles (kits presse / brand guidelines) :
+  Claude  : https://www.anthropic.com  (rubrique presse / brand)
+  ChatGPT : https://openai.com/brand
+  Gemini  : https://gemini.google.com  (ressources presse Google)
+  Grok    : https://x.ai  (rubrique presse / brand)
+Respectez les règles d'usage de chaque marque.
+Sans fichier, le bouton affiche une simple initiale.

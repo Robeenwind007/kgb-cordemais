@@ -78,6 +78,14 @@ input[type=text],input[type=date],textarea{font:inherit;color:var(--ink);backgro
 textarea{resize:vertical;min-height:38px;width:100%}
 input:focus,textarea:focus{outline:2px solid var(--brass2);outline-offset:0}
 .toggle{display:flex;align-items:center;gap:8px;color:var(--ink2);font-size:15px}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:5px;margin-bottom:6px}
+.seg button{display:flex;align-items:center;gap:10px;text-align:left;border:1px solid transparent;background:none;color:var(--ink2);border-radius:9px;padding:10px 12px}
+.seg button .si{font-size:24px;line-height:1}
+.seg button b{display:block;color:var(--ink);font-size:15px}
+.seg button small{display:block;font-size:12.5px;color:var(--ink3);line-height:1.3}
+.seg button.on{background:#2a1f1a;border-color:var(--brass);box-shadow:0 0 0 1px var(--brass) inset}
+.seg button.on b{color:var(--brass)}
+@media (max-width:560px){.seg{grid-template-columns:1fr}}
 .toggle input{width:18px;height:18px;accent-color:var(--red)}
 .progress{height:6px;background:var(--bg2);border-radius:99px;overflow:hidden;margin-top:12px}
 .progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--red),var(--brass));transition:width .2s}
@@ -130,6 +138,14 @@ dialog ol{padding-left:20px;color:var(--ink2);margin:6px 0 12px}
 dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 .find .dom{font:inherit;font-size:12px;font-weight:700;border-radius:999px;padding:2px 6px;background:var(--bg);border:1px solid var(--dc);color:var(--dc);cursor:pointer}
 .find .cat{font-size:12px;color:var(--ink3);white-space:nowrap}
+.ai-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%}
+@media (max-width:560px){.ai-grid{grid-template-columns:repeat(2,1fr)}}
+.ai-btn{display:flex;align-items:center;justify-content:center;gap:9px;padding:11px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);color:var(--ink);font-weight:700;font-size:15px}
+.ai-btn:hover{border-color:var(--brass);background:#2a1f1a}
+.ai-btn::after{content:"↗";color:var(--ink3);font-weight:400;font-size:13px}
+.ai-logo{width:24px;height:24px;flex:none;display:inline-grid;place-items:center;border-radius:6px;overflow:hidden}
+.ai-logo img{width:100%;height:100%;object-fit:contain}
+.ai-logo.fallback{background:var(--line);color:var(--ink);font-size:13px;font-weight:800;font-family:Oswald,sans-serif}
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--brass);color:#1b1206;font-weight:600;padding:10px 18px;border-radius:999px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 .spin{display:inline-block;width:16px;height:16px;border:2px solid #fff6;border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -163,6 +179,10 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
   <main>
     <section class="card">
       <h2><span class="n">1</span>Documents</h2>
+      <div class="seg" id="modeSeg" role="radiogroup" aria-label="Type de documents">
+        <button data-m="collectivite" role="radio"><span class="si">🏛️</span><span><b>Municipaux / intercommunaux</b><small>Conseil municipal ou communautaire : budget, délibérations, M57, CGCT</small></span></button>
+        <button data-m="general" role="radio"><span class="si">📄</span><span><b>Documents généraux</b><small>Contrats, devis, rapports, notes : cohérence, calculs, clauses</small></span></button>
+      </div>
       <div class="row">
         <button class="btn primary" id="pickBtn">⬆ Télécharger des documents</button>
         <button class="btn sm" id="clearBtn">Tout retirer</button>
@@ -176,8 +196,8 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
     <section class="card">
       <h2><span class="n">2</span>Rapport</h2>
       <div class="fields">
-        <label class="f">Collectivité<input type="text" id="fColl" placeholder="Ex. Commune de Cordemais"></label>
-        <label class="f">Séance du conseil<input type="date" id="fDate"></label>
+        <label class="f"><span id="lblColl">Collectivité</span><input type="text" id="fColl" placeholder="Ex. Commune de Cordemais"></label>
+        <label class="f"><span id="lblDate">Séance du conseil</span><input type="date" id="fDate"></label>
         <label class="f">Rédigé par<input type="text" id="fAuthor" placeholder="Nom"></label>
       </div>
       <div class="row" style="margin-top:14px;justify-content:space-between">
@@ -214,18 +234,20 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 <dialog id="claudeDlg" class="wide">
   <h3>Approfondir avec une IA</h3>
   <ol>
-    <li>Ouvrez Claude ou ChatGPT : une nouvelle conversation s'ouvre avec le prompt déjà saisi (il est aussi copié dans le presse-papier).</li>
+    <li>Ouvrez l'IA de votre choix : le prompt est copié dans le presse-papier et, pour Claude, ChatGPT et Grok, déjà saisi dans la conversation (pour Gemini, collez-le).</li>
     <li><b>Joignez les PDF</b> avant d'envoyer — un lien ne peut pas transporter de fichiers.</li>
     <li>Copiez toute la réponse de l'IA et collez-la dans le cadre du bas, puis « Importer ».</li>
   </ol>
   <textarea id="promptTxt" rows="7" readonly></textarea>
-  <div class="row" style="margin:8px 0 16px">
-    <button class="btn primary sm open-ai" data-ai="Claude">↗ Ouvrir dans Claude</button>
-    <button class="btn primary sm open-ai" data-ai="ChatGPT">↗ Ouvrir dans ChatGPT</button>
-    <button class="btn sm" id="copyPromptBtn">📋 Copier le prompt</button>
+  <div class="ai-grid" style="margin:10px 0 8px">
+    <button class="ai-btn open-ai" data-ai="Claude"><span class="ai-logo" data-id="claude" data-ini="C"></span><span>Claude</span></button>
+    <button class="ai-btn open-ai" data-ai="ChatGPT"><span class="ai-logo" data-id="chatgpt" data-ini="G"></span><span>ChatGPT</span></button>
+    <button class="ai-btn open-ai" data-ai="Gemini"><span class="ai-logo" data-id="gemini" data-ini="G"></span><span>Gemini</span></button>
+    <button class="ai-btn open-ai" data-ai="Grok"><span class="ai-logo" data-id="grok" data-ini="X"></span><span>Grok</span></button>
   </div>
+  <div class="row" style="margin:0 0 16px"><button class="btn sm" id="copyPromptBtn">📋 Copier le prompt seul</button></div>
   <label class="f">Réponse de
-    <select id="aiSrc" style="font:inherit;color:var(--ink);background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;max-width:180px"><option>Claude</option><option>ChatGPT</option></select>
+    <select id="aiSrc" style="font:inherit;color:var(--ink);background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;max-width:180px"><option>Claude</option><option>ChatGPT</option><option>Gemini</option><option>Grok</option></select>
   </label>
   <label class="f" style="margin-top:8px">Réponse complète
     <textarea id="answerTxt" rows="6" placeholder="Collez ici la réponse complète (avec le bloc JSON)…"></textarea>
@@ -239,8 +261,11 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.8.0', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.10.1', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.10.1', d: '06/10/2026', items: ['Boutons IA avec logo (fichiers à déposer dans logos/), badge de remplacement sinon'] },
+  { v: '1.10.0', d: '06/10/2026', items: ['Gemini et Grok ajoutés comme IA alternatives (avec Claude et ChatGPT)'] },
+  { v: '1.9.0', d: '06/10/2026', items: ['Choix du type de documents : municipaux / intercommunaux ou généraux', 'Prompt IA, thèmes, libellés et page de garde adaptés au type choisi', 'Thèmes dédiés aux documents généraux : Contractuel, Fiscal, Commercial, Technique, Rédaction…'] },
   { v: '1.8.0', d: '06/10/2026', items: ['Page de garde du rapport : insigne, titre, collectivité, séance, chiffres clés', 'Liste des documents analysés avec liens vers chaque document joint'] },
   { v: '1.7.0', d: '06/10/2026', items: ['Documents d\'origine intégrés à la fin du rapport PDF (option)', 'Chaque référence est un lien vers la page citée ; le passage est surligné et numéroté', 'Clic sur un surlignage : retour à la remarque correspondante'] },
   { v: '1.6.0', d: '06/10/2026', items: ['PDF : une section par thème avec bandeau coloré', 'Vignettes cliquables menant directement à la section du thème, liens « Retour à la synthèse »', 'Signets PDF (panneau latéral) : Synthèse, chaque thème, Annexe'] },
@@ -291,9 +316,9 @@ const DOMAIN_META = {
   'Intercommunalité': { ic: '🏛️', c: '#7f9cc0' },
   'Gestion':          { ic: '🗂️', c: '#9a9a9a' }
 };
-const DOMAINS = ['Juridique', 'Financier', 'Comptable', 'RH', 'CCAS', 'Urbanisme', 'Culture', 'Enfance-Jeunesse', 'Travaux-Voirie', 'Vie associative', 'Environnement', 'Intercommunalité', 'Gestion'];
+const DOMAINS_COLL = ['Juridique', 'Financier', 'Comptable', 'RH', 'CCAS', 'Urbanisme', 'Culture', 'Enfance-Jeunesse', 'Travaux-Voirie', 'Vie associative', 'Environnement', 'Intercommunalité', 'Gestion'];
 // ordre = priorité : les domaines thématiques passent avant Comptable / Financier
-const DOMAIN_RULES = [
+const DOMAIN_RULES_COLL = [
   ['CCAS', /\bccas\b|action sociale|solidarit|aide sociale|personnes [aâ]g[ée]es|portage de repas|ehpad/i],
   ['RH', /\bpersonnel|\bagents?\b|effectifs?|emplois?\b|\bpostes?\b|recrut|r[ée]mun[ée]ration|rifseep|carri[èe]re|cdg|chapitre 012|\b012\b|vacataire|titularis/i],
   ['Urbanisme', /urbanisme|\bplui?\b|permis de|foncier|cession|acquisition|parcelle|terrain|\bzac\b|lotissement|am[ée]nagement|logements?|habitat|droit de pr[ée]emption|\bscot\b/i],
@@ -307,10 +332,42 @@ const DOMAIN_RULES = [
   ['Comptable', /\bm57\b|\bm14\b|\bm4\b|chapitre|\bcompte\b|\bd001\b|\br001\b|\br002\b|\b1068\b|affectation du r[ée]sultat|amortissement|mandat|restes? [àa] r[ée]aliser|compte administratif|compte financier unique|\bcfu\b|compte de gestion|op[ée]rations? d'ordre|virement|imputation/i],
   ['Financier', /budget|d[ée]penses?|recettes?|emprunt|dette|fiscal|tax|imp[ôo]ts?|[ée]pargne|investissement|fonctionnement|subvention|dotation|\bdgf\b|tarif|co[ûu]t|montant|€|euros?/i]
 ];
+const DOMAINS_GEN = ['Juridique', 'Contractuel', 'Financier', 'Comptable', 'Fiscal', 'RH', 'Commercial', 'Technique', 'Rédaction', 'Gestion'];
+const DOMAIN_RULES_GEN = [
+  ['Contractuel', /contrat|clause|avenant|conditions g[ée]n[ée]rales|\bcgv\b|r[ée]siliation|p[ée]nalit|garantie|engagement|signataire|parties|cocontractant|dur[ée]e du contrat/i],
+  ['Fiscal', /\btva\b|\bht\b|\bttc\b|imp[ôo]t|fiscal|\btaxe|\bcfe\b|cr[ée]dit d'imp[ôo]t/i],
+  ['RH', /salari|\bpersonnel|effectif|\bpaie\b|r[ée]mun[ée]ration|embauche|cong[ée]s|convention collective|contrat de travail/i],
+  ['Commercial', /client|chiffre d'affaires|\bventes?\b|devis|remise|marge|tarif|commande|fournisseur|prix unitaire/i],
+  ['Technique', /technique|sp[ée]cification|cahier des charges|\bnormes?\b|dimension|mat[ée]riau|installation|maintenance|d[ée]lai de livraison|planning/i],
+  ['Juridique', /\barticle\b|\bloi\b|\bcode\b|d[ée]cret|r[èe]glement|tribunal|litige|conformit|\brgpd\b|statuts|mentions l[ée]gales|juridiction/i],
+  ['Comptable', /bilan|compte de r[ée]sultat|amortissement|[ée]criture|\bcompte\b|exercice comptable|provision|\bactif|\bpassif|balance/i],
+  ['Financier', /budget|co[ûu]t|d[ée]pense|recette|tr[ée]sorerie|financement|emprunt|investissement|montant|€|euros?/i]
+];
+const DOMAIN_META_GEN = {
+  'Contractuel': { ic: '📜', c: '#a07ce0' }, 'Fiscal': { ic: '🧾', c: '#d97a5a' }, 'Commercial': { ic: '📈', c: '#3cb5ad' },
+  'Technique': { ic: '🛠️', c: '#7f9cc0' }, 'Rédaction': { ic: '✍️', c: '#c06ad6' }
+};
+Object.assign(DOMAIN_META, DOMAIN_META_GEN);
+const PROFILES = {
+  collectivite: {
+    domains: DOMAINS_COLL, rules: DOMAIN_RULES_COLL,
+    orgLabel: 'Collectivité', orgPh: 'Ex. Commune de Cordemais', dateLabel: 'Séance du conseil', dateWord: 'Séance du',
+    coverSub: 'Contrôle des documents préparatoires au conseil', orgDefault: 'Documents du conseil'
+  },
+  general: {
+    domains: DOMAINS_GEN, rules: DOMAIN_RULES_GEN,
+    orgLabel: 'Organisation / dossier', orgPh: 'Ex. Marché de rénovation école', dateLabel: 'Date de référence', dateWord: 'Date de référence :',
+    coverSub: 'Contrôle de cohérence documentaire', orgDefault: 'Dossier documentaire'
+  }
+};
+let MODE = 'collectivite', DOMAINS = DOMAINS_COLL, DOMAIN_RULES = DOMAIN_RULES_COLL;
+function setMode(m) { MODE = PROFILES[m] ? m : 'collectivite'; DOMAINS = PROFILES[MODE].domains; DOMAIN_RULES = PROFILES[MODE].rules; }
+
 function classifyDomain(f, docName = '') {
   const txt = [f.title, f.detail, ...(f.refs || []).map(r => r.extract + ' ' + r.doc), docName].join(' ');
   for (const [d, re] of DOMAIN_RULES) if (re.test(txt)) return d;
-  return ['calc', 'evol', 'arith', 'sens', 'incoh'].includes(f.cat) ? 'Financier' : 'Gestion';
+  if (['calc', 'evol', 'arith', 'sens', 'incoh'].includes(f.cat)) return 'Financier';
+  return MODE === 'general' && ['redite', 'date'].includes(f.cat) ? 'Rédaction' : 'Gestion';
 }
 function normDomain(s) {
   if (!s) return null;
@@ -685,7 +742,7 @@ async function parsePdf(data, name, onPage) {
   }
   return { name, numPages: pdf.numPages, pages, chars };
 }
-if (typeof module !== 'undefined') module.exports = { classifyDomain, analyze, parsePdf, buildLines, extractNums, APP };
+if (typeof module !== 'undefined') module.exports = { setMode, classifyDomain, analyze, parsePdf, buildLines, extractNums, APP };
 </script>
 
 <!-- ============ UI ============ -->
@@ -709,6 +766,19 @@ $('#enter').onclick = () => {
 ['fColl', 'fAuthor'].forEach(id => { const el = $('#' + id); el.value = store.get(id) || ''; el.oninput = () => store.set(id, el.value); });
 $('#autoChk').checked = store.get('auto') !== '0';
 $('#autoChk').onchange = e => store.set('auto', e.target.checked ? '1' : '0');
+function applyMode(m, reclass) {
+  setMode(m); store.set('mode', MODE);
+  const P = PROFILES[MODE];
+  document.querySelectorAll('#modeSeg button').forEach(b => { const on = b.dataset.m === MODE; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+  $('#lblColl').textContent = P.orgLabel; $('#fColl').placeholder = P.orgPh; $('#lblDate').textContent = P.dateLabel;
+  if (reclass && state.findings.length) {
+    state.findings.forEach(f => { if (f.cat !== 'ia' || !DOMAINS.includes(f.dom)) f.dom = classifyDomain(f); });
+    state.filter = 'all'; renderReport();
+    toast('Thèmes recalculés pour « ' + (MODE === 'general' ? 'Documents généraux' : 'Municipaux / intercommunaux') + ' »');
+  }
+}
+document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => { if (b.dataset.m !== MODE) applyMode(b.dataset.m, true); });
+applyMode(store.get('mode') || 'collectivite', false);
 $('#attachChk').checked = store.get('attach') !== '0';
 $('#attachChk').onchange = e => store.set('attach', e.target.checked ? '1' : '0');
 
@@ -816,7 +886,19 @@ function buildPrompt() {
   const auto = state.findings.filter(f => f.cat !== 'ia');
   promptMap = auto.map(f => f.id);
   const lines = [];
-  lines.push(`Tu es un analyste expérimenté en finances publiques locales (CGCT, nomenclatures M57/M14). Je te joins les documents préparatoires ${coll ? 'au conseil de « ' + coll + ' »' : 'à un conseil municipal'}${seance ? ' (séance du ' + new Date(seance).toLocaleDateString('fr-FR') + ')' : ''} :`);
+  const dateFr = seance ? new Date(seance).toLocaleDateString('fr-FR') : '';
+  if (MODE === 'general') {
+    lines.push(`Tu es un auditeur documentaire rigoureux (contrôle de gestion, droit des contrats, qualité rédactionnelle). Je te joins des documents à relire${coll ? ' pour le dossier « ' + coll + ' »' : ''}${dateFr ? ' (date de référence : ' + dateFr + ')' : ''} :`);
+    docs.forEach(d => lines.push(`- ${d.name} (${d.numPages} p.)`));
+    lines.push('', 'Mission : relire ces documents et lister les points à revoir avant leur validation ou leur signature, en particulier :',
+      '- erreurs de calcul : totaux, sous-totaux, pourcentages, HT/TVA/TTC, quantités x prix unitaires, reports de montants ;',
+      '- incohérences internes ou entre documents : montants, dates, délais, noms, adresses, références, numéros d\'articles ou d\'annexes ;',
+      '- contradictions entre clauses, engagements, conditions ou délais ;',
+      '- redites contenant des chiffres ou des informations différentes ;',
+      '- risques juridiques ou contractuels : mentions obligatoires absentes, clauses ambiguës ou déséquilibrées, renvois erronés, annexes citées mais absentes ;',
+      '- informations manquantes, formulations ambiguës, erreurs de forme (numérotation, titres, renvois).');
+  } else {
+  lines.push(`Tu es un analyste expérimenté en finances publiques locales (CGCT, nomenclatures M57/M14). Je te joins les documents préparatoires ${coll ? 'au conseil de « ' + coll + ' »' : 'à un conseil municipal ou communautaire'}${dateFr ? ' (séance du ' + dateFr + ')' : ''} :`);
   docs.forEach(d => lines.push(`- ${d.name} (${d.numPages} p.)`));
   lines.push('', 'Mission : relire ces documents et lister les points à revoir avant la séance, en particulier :',
     '- erreurs de calcul : totaux, sous-totaux, pourcentages, reports de montants ;',
@@ -825,6 +907,7 @@ function buildPrompt() {
     '- incohérences budgétaires : équilibre des sections, résultats reportés (R002, D001/R001), affectation du résultat, restes à réaliser, épargne brute et nette, capacité de désendettement ;',
     '- fragilités juridiques de forme : visas et références, mentions obligatoires, quorum, numérotation des délibérations ;',
     '- informations manquantes ou formulations ambiguës empêchant les élus de se prononcer en connaissance de cause.');
+  }
   if (auto.length) {
     lines.push('', "Une première analyse automatique a relevé ces points. Pour chacun, confirme-le ou indique s'il s'agit d'un faux positif :");
     auto.forEach((f, i) => lines.push(`A${i + 1}. ${f.title} — ${f.refs.map(r => r.doc + ' p.' + r.page).join(' ; ')}`));
@@ -852,19 +935,33 @@ $('#claudeBtn').onclick = () => {
   $('#claudeDlg').showModal();
 };
 const MAX_URL = 7000;
-const AI_URL = { Claude: 'https://claude.ai/new', ChatGPT: 'https://chatgpt.com/' };
+/* Logos : déposez les fichiers officiels dans logos/ (claude, chatgpt, gemini, grok en .svg, .png ou .webp) */
+document.querySelectorAll('.ai-logo').forEach(el => {
+  const exts = ['svg', 'png', 'webp'];
+  const tryExt = i => {
+    if (i >= exts.length) { el.classList.add('fallback'); el.textContent = el.dataset.ini; return; }
+    const img = new Image(); img.alt = '';
+    img.onload = () => { el.innerHTML = ''; el.appendChild(img); };
+    img.onerror = () => tryExt(i + 1);
+    img.src = `logos/${el.dataset.id}.${exts[i]}`;
+  };
+  tryExt(0);
+});
+const AI_URL = { Claude: 'https://claude.ai/new', ChatGPT: 'https://chatgpt.com/', Gemini: 'https://gemini.google.com/app', Grok: 'https://grok.com/' };
+const AI_PREFILL = { Claude: true, ChatGPT: true, Gemini: false, Grok: true };
 document.querySelectorAll('.open-ai').forEach(b => b.onclick = async () => {
   const ai = b.dataset.ai, base = AI_URL[ai];
   $('#aiSrc').value = ai; store.set('ai', ai);
   const p = $('#promptTxt').value;
   const copied = await copyText(p, $('#promptTxt'));
   const q = encodeURIComponent(p);
-  if (q.length <= MAX_URL) {
+  if (AI_PREFILL[ai] && q.length <= MAX_URL) {
     window.open(base + '?q=' + q, '_blank', 'noopener');
     toast(`Joignez les PDF dans ${ai} puis envoyez`);
   } else {
     window.open(base, '_blank', 'noopener');
-    toast(copied ? 'Prompt trop long pour le lien : collez-le (déjà copié)' : 'Prompt trop long : copiez-le manuellement');
+    const why = AI_PREFILL[ai] ? 'Prompt trop long pour le lien' : `${ai} n'accepte pas le préremplissage`;
+    toast(copied ? `${why} : collez-le (déjà copié), joignez les PDF` : `${why} : copiez-le manuellement`);
   }
 });
 $('#copyPromptBtn').onclick = async () => {
@@ -958,10 +1055,10 @@ async function exportPdf() {
   doc.setTextColor(209, 173, 102); doc.setFont('helvetica', 'bold'); doc.setFontSize(30);
   doc.text("RAPPORT D'ANALYSE", W / 2, cy, { align: 'center' }); cy += 9;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(12); doc.setTextColor(200, 185, 178);
-  doc.text('Contrôle des documents préparatoires au conseil', W / 2, cy, { align: 'center' }); cy += 14;
+  doc.text(pdfSafe(PROFILES[MODE].coverSub), W / 2, cy, { align: 'center' }); cy += 14;
   doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(17);
-  doc.text(pdfSafe(coll || 'Documents du conseil'), W / 2, cy, { align: 'center' }); cy += 7.5;
-  if (seanceTxt) { doc.setFont('helvetica', 'normal'); doc.setFontSize(12); doc.setTextColor(230, 220, 214); doc.text(pdfSafe('Séance du ' + seanceTxt), W / 2, cy, { align: 'center' }); cy += 6; }
+  doc.text(pdfSafe(coll || PROFILES[MODE].orgDefault), W / 2, cy, { align: 'center' }); cy += 7.5;
+  if (seanceTxt) { doc.setFont('helvetica', 'normal'); doc.setFontSize(12); doc.setTextColor(230, 220, 214); doc.text(pdfSafe(PROFILES[MODE].dateWord + ' ' + seanceTxt), W / 2, cy, { align: 'center' }); cy += 6; }
   cy += 6;
   // chiffres clés
   const nThemes = new Set(sel.map(f => f.dom)).size;
@@ -1004,7 +1101,7 @@ async function exportPdf() {
   doc.setTextColor(209, 173, 102); doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
   doc.text("RAPPORT D'ANALYSE", M + 24, 14);
   doc.setTextColor(241, 233, 228); doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-  doc.text(pdfSafe([coll || 'Documents du conseil', seance ? 'Séance du ' + new Date(seance).toLocaleDateString('fr-FR') : ''].filter(Boolean).join(' - ')), M + 24, 21);
+  doc.text(pdfSafe([coll || PROFILES[MODE].orgDefault, seance ? PROFILES[MODE].dateWord + ' ' + new Date(seance).toLocaleDateString('fr-FR') : ''].filter(Boolean).join(' - ')), M + 24, 21);
   doc.text(pdfSafe(`Généré le ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${author ? ' par ' + author : ''}`), M + 24, 27);
 
   let y = 44;
