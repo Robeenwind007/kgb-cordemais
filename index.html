@@ -295,8 +295,9 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.15.1', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.15.2', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.15.2', d: '16/10/2026', items: ['Liens retour depuis les surlignages fiabilisés (compatibles Aperçu / Acrobat / navigateurs)', 'Bouton « Retour au rapport » en haut de chaque page d\'origine'] },
   { v: '1.15.1', d: '16/10/2026', items: ['Le nom de l\'IA interrogée n\'apparaît plus dans le rapport (points, commentaires, PDF)'] },
   { v: '1.15.0', d: '06/10/2026', items: ['PDF : accès par priorité (haute, à vérifier, mineurs) en vignettes cliquables', 'Index des points du plus important au moins important, chaque ligne menant au détail', 'Signets « Par priorité »'] },
   { v: '1.14.1', d: '06/10/2026', items: ['Correction : export PDF en erreur quand une remarque longue est coupée sur deux pages'] },
@@ -1680,7 +1681,9 @@ async function embedSources(bytes, holders, refLinks, rowPos) {
     else pg.drawText('Page non intégrable (document protégé ?)', { x: 40, y: pg.getHeight() / 2, size: 14, font, color: rgb(0.75, 0.1, 0.12) });
   }
   const link = (page, rect, dest, top) => {
-    const annot = ctx.obj({ Type: 'Annot', Subtype: 'Link', Rect: rect, Border: [0, 0, 0], Dest: [dest.ref, 'XYZ', null, top, null] });
+    // valeurs numériques explicites (certains lecteurs, dont Aperçu, ignorent les destinations contenant null)
+    const r = [Math.min(rect[0], rect[2]), Math.min(rect[1], rect[3]), Math.max(rect[0], rect[2]), Math.max(rect[1], rect[3])];
+    const annot = ctx.obj({ Type: 'Annot', Subtype: 'Link', Rect: r, Border: [0, 0, 0], F: 4, H: 'I', Dest: [dest.ref, 'XYZ', 0, Math.round(top * 100) / 100, 0] });
     page.node.addAnnot(ctx.register(annot));
   };
   const done = new Set(), lineTags = {};
@@ -1712,7 +1715,7 @@ async function embedSources(bytes, holders, refLinks, rowPos) {
       src.drawRectangle({ x: lx, y: ly, width: lw, height: 9, color: rgb(0.75, 0.08, 0.12) });
       src.drawText(label, { x: lx + 3, y: ly + 2.2, size: 7, font, color: rgb(1, 1, 1) });
       const back = rowPos[rl.num];
-      if (back) { const bp = pages[back.page - 1], tb = bp.getHeight() - back.y * K + 8; link(src, [hl[0], hl[1], hl[2], hl[3]], bp, tb); link(src, [lx, ly, lx + lw, ly + 9], bp, tb); }
+      if (back) { const bp = pages[back.page - 1], tb = bp.getHeight() - back.y * K + 8; link(src, [Math.min(lx, hl[0]), Math.min(ly, hl[1]), hl[2], Math.max(ly + 9, hl[3])], bp, tb); }
     } else {
       const lx = 6, ly = SH - 14;
       src.drawRectangle({ x: lx, y: ly, width: lw + 52, height: 10, color: rgb(0.75, 0.08, 0.12) });
@@ -1720,6 +1723,15 @@ async function embedSources(bytes, holders, refLinks, rowPos) {
       const back = rowPos[rl.num];
       if (back) { const bp = pages[back.page - 1]; link(src, [lx, ly, lx + lw + 52, ly + 10], bp, bp.getHeight() - back.y * K + 8); }
     }
+  }
+  // bandeau discret « Retour au rapport » en haut de chaque page d'origine
+  const synth = pages[1];
+  if (synth) for (const h of holders) {
+    const pg = pages[h.jsPage - 1], PW = pg.getWidth(), PHh = pg.getHeight();
+    const lbl = '^ Retour au rapport', fs = 6.5, w = font.widthOfTextAtSize(lbl, fs) + 8;
+    pg.drawRectangle({ x: PW - w - 6, y: PHh - 13, width: w, height: 9, color: rgb(1, 1, 1), opacity: 0.85, borderColor: rgb(0.66, 0.52, 0.25), borderWidth: 0.4 });
+    pg.drawText(lbl, { x: PW - w - 2, y: PHh - 10.2, size: fs, font, color: rgb(0.48, 0.07, 0.09) });
+    link(pg, [PW - w - 6, PHh - 13, PW - 6, PHh - 4], synth, synth.getHeight());
   }
   return await out.save();
 }
