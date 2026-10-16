@@ -295,8 +295,9 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.15.0', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.15.1', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.15.1', d: '16/10/2026', items: ['Le nom de l\'IA interrogée n\'apparaît plus dans le rapport (points, commentaires, PDF)'] },
   { v: '1.15.0', d: '06/10/2026', items: ['PDF : accès par priorité (haute, à vérifier, mineurs) en vignettes cliquables', 'Index des points du plus important au moins important, chaque ligne menant au détail', 'Signets « Par priorité »'] },
   { v: '1.14.1', d: '06/10/2026', items: ['Correction : export PDF en erreur quand une remarque longue est coupée sur deux pages'] },
   { v: '1.14.0', d: '06/10/2026', items: ['PDF : présentation sobre sur fond blanc (titres serif, filets or et bordeaux), sans logo ni bandeau sombre'] },
@@ -1173,7 +1174,7 @@ function renderReport() {
       <div class="hd"><input type="checkbox" ${f.include ? 'checked' : ''} title="Inclure dans le rapport">
         <select class="dom" title="Thème (modifiable)" style="--dc:${DOMAIN_META[f.dom].c}">${DOMAINS.map(d => `<option value="${d}" ${d === f.dom ? 'selected' : ''}>${DOMAIN_META[d].ic} ${d}</option>`).join('')}</select>
         <div class="t">${esc(f.title)}</div><span class="sev">${f.sev}</span></div>
-      <div class="d">${esc(f.detail)} <span class="cat">· ${f.cat === 'ia' ? 'Analyse ' + (f.src || 'IA') : CATS[f.cat]}</span></div>
+      <div class="d">${esc(f.detail)} <span class="cat">· ${CATS[f.cat]}</span></div>
       <ul class="refs">${f.refs.map(r => `<li><b>${esc(r.doc)}</b> — page ${r.page}<q>${esc(r.extract)}</q></li>`).join('')}</ul>
       <textarea rows="1" placeholder="Commentaire / question à poser en séance…">${esc(f.note)}</textarea>
     </article>`).join('')
@@ -1287,15 +1288,15 @@ $('#importBtn').onclick = () => {
     const ref = String(o.ref_auto || '').match(/A?(\d+)/i);
     const target = ref ? state.findings.find(f => f.id === promptMap[+ref[1] - 1]) : null;
     if (target && /faux/.test(statut)) {
-      target.include = false; target.note = (ai + ' : faux positif. ' + (o.explication || '')).trim(); nFp++; continue;
+      target.include = false; target.note = ('Faux positif. ' + (o.explication || '')).trim(); nFp++; continue;
     }
     if (target && /confirm/.test(statut)) {
-      target.note = ('Confirmé par ' + ai + '. ' + (o.explication || '')).trim(); nConf++; continue;
+      target.note = ('Confirmé. ' + (o.explication || '')).trim(); nConf++; continue;
     }
     const sev = ['haute', 'moyenne', 'faible'].includes(String(o.priorite).toLowerCase()) ? String(o.priorite).toLowerCase() : 'moyenne';
     const nf = {
       id: nextId++, include: true, note: '', cat: 'ia', sev,
-      title: String(o.titre || 'Point relevé par ' + ai), src: ai,
+      title: String(o.titre || 'Point relevé'), src: ai,
       detail: String(o.explication || '') + (o.recommandation ? ' Recommandation : ' + String(o.recommandation) : ''),
       refs: [{ doc: String(o.document || 'Document'), page: o.page ?? '', extract: String(o.extrait || '').slice(0, 300) }]
     };
@@ -1541,7 +1542,7 @@ async function exportPdf() {
         head: [['N°', 'Point à revoir', 'Référence', 'Priorité']],
         body: items.map(f => [
           String(numOf(f)),
-          pdfSafe(`${f.title}\n${f.detail}` + (f.cat === 'ia' && f.src ? `\n(Analyse ${f.src})` : '') + (f.note.trim() ? `\n> Commentaire : ${f.note.trim()}` : '')),
+          pdfSafe(`${f.title}\n${f.detail}` + (f.note.trim() ? `\n> Commentaire : ${f.note.trim()}` : '')),
           pdfSafe(f.refs.map(r => `${r.doc}${r.page ? ', p. ' + r.page : ''}`).join('\n') || '-'),
           f.sev.toUpperCase()
         ]),
