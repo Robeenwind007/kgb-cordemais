@@ -295,8 +295,9 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.15.3', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.15.4', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.15.4', d: '22/10/2026', items: ['Le prompt envoyé à l\'IA tient toujours dans le lien : sur un gros dossier, il garde les points automatiques les plus importants (liste complète dans le presse-papier)'] },
   { v: '1.15.3', d: '22/10/2026', items: ['Correctif : l\'IA s\'ouvre immédiatement avec le prompt saisi (la copie dans le presse-papier ne bloque plus l\'ouverture)', 'Prompt raccourci (documents codés D1, D2…) et limite de longueur relevée ; version allégée automatique si le dossier est très volumineux'] },
   { v: '1.15.2', d: '16/10/2026', items: ['Liens retour depuis les surlignages fiabilisés (compatibles Aperçu / Acrobat / navigateurs)', 'Bouton « Retour au rapport » en haut de chaque page d\'origine'] },
   { v: '1.15.1', d: '16/10/2026', items: ['Le nom de l\'IA interrogée n\'apparaît plus dans le rapport (points, commentaires, PDF)'] },
@@ -1190,7 +1191,7 @@ function renderReport() {
 }
 /* ---------- Claude (copier / importer) ---------- */
 let promptMap = [];
-function buildPrompt(compact) {
+function buildPrompt(budget) {
   const coll = $('#fColl').value.trim(), seance = $('#fDate').value;
   const docs = state.docs.filter(d => d.pages.length);
   const auto = state.findings.filter(f => f.cat !== 'ia');
@@ -1202,17 +1203,31 @@ function buildPrompt(compact) {
   docs.forEach((d, i) => lines.push(`- D${i + 1} : ${d.name} (${d.numPages} p.)`));
   lines.push('', P.missionHead, ...P.missions);
   const dcode = n => { const i = docs.findIndex(d => d.name === n); return i >= 0 ? 'D' + (i + 1) : n; };
-  if (auto.length && !compact) {
-    lines.push('', "Une première analyse automatique a relevé ces points. Pour chacun, confirme-le ou indique s'il s'agit d'un faux positif :");
-    auto.forEach((f, i) => lines.push(`A${i + 1}. ${f.title} (${[...new Set(f.refs.map(r => dcode(r.doc) + ' p.' + r.page))].join(', ')})`));
-  }
-  lines.push('', "Règles : ne signale que ce que tu peux justifier par le texte des documents, cite toujours le document et la page, reste factuel et concis. N'invente aucun chiffre. " + AI_RULES_COMMON + " Ignore les en-têtes, pieds de page et numéros de page.",
+  const aLines = auto.map((f, i) => ({ sev: f.sev, i, s: `A${i + 1}. ${f.title} (${[...new Set(f.refs.map(r => dcode(r.doc) + ' p.' + r.page))].join(', ')})` }));
+  const tail = [];
+  tail.push('', "Règles : ne signale que ce que tu peux justifier par le texte des documents, cite toujours le document et la page, reste factuel et concis. N'invente aucun chiffre. " + AI_RULES_COMMON + " Ignore les en-têtes, pieds de page et numéros de page.",
     '', 'Réponds en deux parties :',
     '1) Une synthèse en 5 lignes maximum.',
     '2) Un bloc ```json contenant un tableau d\'objets de la forme :',
     '{"titre": "court", "explication": "1 à 3 phrases", "priorite": "haute|moyenne|faible", "document": "nom exact du fichier", "page": 3, "extrait": "citation courte du passage", "statut": "nouveau|confirme|faux_positif", "ref_auto": "A2 ou null", "domaine": "un parmi : ' + DOMAINS.join(', ') + '", "recommandation": "correction ou action suggérée, courte (facultatif)"}',
     'Les points automatiques confirmés ou infirmés doivent figurer avec leur ref_auto.');
-  return lines.join('\n');
+  const head = "Une première analyse automatique a relevé ces points. Pour chacun, confirme-le ou indique s'il s'agit d'un faux positif :";
+  const assemble = list => {
+    const mid = list.length ? ['', head, ...list.map(a => a.s)] : [];
+    const rest = aLines.length - list.length;
+    if (rest > 0) mid.push(`(${rest} autre(s) point(s) mineur(s) ou à vérifier non listé(s) ici, faute de place.)`);
+    return [...lines, ...mid, ...tail].join('\n');
+  };
+  if (!budget) return assemble(aLines);
+  // version pour le lien : on garde les points les plus importants tant que ça tient dans la limite
+  const order = [...aLines].sort((a, b) => SEV_ORDER[a.sev] - SEV_ORDER[b.sev] || a.i - b.i);
+  let keep = [];
+  for (const a of order) {
+    const trial = [...keep, a].sort((x, y) => x.i - y.i);
+    if (encodeURIComponent(assemble(trial)).length > budget) break;
+    keep = trial;
+  }
+  return assemble(keep);
 }
 function toast(msg) {
   const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg;
@@ -1228,7 +1243,7 @@ $('#claudeBtn').onclick = () => {
   $('#aiSrc').value = store.get('ai') || 'Claude';
   $('#claudeDlg').showModal();
 };
-const MAX_URL = 12000;
+const MAX_URL = 6500; // longueur de lien sûre pour Claude, ChatGPT et Grok
 /* Logos : déposez les fichiers officiels dans logos/ (claude, chatgpt, gemini, grok en .svg, .png ou .webp) */
 document.querySelectorAll('.ai-logo[data-id]').forEach(el => {
   const exts = ['svg', 'png', 'webp'];
@@ -1264,13 +1279,13 @@ document.querySelectorAll('.open-ai').forEach(b => b.onclick = () => {
   store.set('ai', ai);
   const p = srcTa.value;
   let q = encodeURIComponent(p), reduced = false;
-  if (q.length > MAX_URL && srcTa.id === 'promptTxt') { q = encodeURIComponent(buildPrompt(true)); reduced = true; }
+  if (q.length > MAX_URL && srcTa.id === 'promptTxt') { q = encodeURIComponent(buildPrompt(MAX_URL)); reduced = true; }
   // 1) ouvrir d'abord, de façon synchrone (sinon le navigateur peut bloquer ou perdre le lien)
   if (AI_PREFILL[ai] && q.length <= MAX_URL) window.open(base + '?q=' + q, '_blank', 'noopener');
   else window.open(base, '_blank', 'noopener');
   // 2) copier ensuite le prompt complet (filet de sécurité)
   const copied = copyNow(p, srcTa);
-  if (AI_PREFILL[ai] && q.length <= MAX_URL) toast(reduced ? `Prompt allégé saisi dans ${ai} (version complète copiée : collez-la à la place si besoin). Joignez les PDF.` : `Joignez les PDF dans ${ai} puis envoyez`);
+  if (AI_PREFILL[ai] && q.length <= MAX_URL) toast(reduced ? `Prompt saisi dans ${ai} avec les points prioritaires (liste complète copiée : collez-la à la place si besoin). Joignez les PDF.` : `Joignez les PDF dans ${ai} puis envoyez`);
   else toast(copied ? 'Prompt trop long pour le lien : collez-le (déjà copié), joignez les PDF' : 'Prompt trop long : copiez-le manuellement');
 });
 
