@@ -295,8 +295,9 @@ dialog textarea{font-size:13px;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ============ ENGINE (analyse) ============ -->
 <script id="engine">
-const APP = { name: 'KGB Doc', version: '1.15.2', build: '2026-10-06' };
+const APP = { name: 'KGB Doc', version: '1.15.3', build: '2026-10-06' };
 const CHANGELOG = [
+  { v: '1.15.3', d: '22/10/2026', items: ['Correctif : l\'IA s\'ouvre immédiatement avec le prompt saisi (la copie dans le presse-papier ne bloque plus l\'ouverture)', 'Prompt raccourci (documents codés D1, D2…) et limite de longueur relevée ; version allégée automatique si le dossier est très volumineux'] },
   { v: '1.15.2', d: '16/10/2026', items: ['Liens retour depuis les surlignages fiabilisés (compatibles Aperçu / Acrobat / navigateurs)', 'Bouton « Retour au rapport » en haut de chaque page d\'origine'] },
   { v: '1.15.1', d: '16/10/2026', items: ['Le nom de l\'IA interrogée n\'apparaît plus dans le rapport (points, commentaires, PDF)'] },
   { v: '1.15.0', d: '06/10/2026', items: ['PDF : accès par priorité (haute, à vérifier, mineurs) en vignettes cliquables', 'Index des points du plus important au moins important, chaque ligne menant au détail', 'Signets « Par priorité »'] },
@@ -1189,7 +1190,7 @@ function renderReport() {
 }
 /* ---------- Claude (copier / importer) ---------- */
 let promptMap = [];
-function buildPrompt() {
+function buildPrompt(compact) {
   const coll = $('#fColl').value.trim(), seance = $('#fDate').value;
   const docs = state.docs.filter(d => d.pages.length);
   const auto = state.findings.filter(f => f.cat !== 'ia');
@@ -1198,17 +1199,18 @@ function buildPrompt() {
   const dateFr = seance ? new Date(seance).toLocaleDateString('fr-FR') : '';
   const P = PROFILES[MODE];
   lines.push(P.intro(coll, dateFr));
-  docs.forEach(d => lines.push(`- ${d.name} (${d.numPages} p.)`));
+  docs.forEach((d, i) => lines.push(`- D${i + 1} : ${d.name} (${d.numPages} p.)`));
   lines.push('', P.missionHead, ...P.missions);
-  if (auto.length) {
+  const dcode = n => { const i = docs.findIndex(d => d.name === n); return i >= 0 ? 'D' + (i + 1) : n; };
+  if (auto.length && !compact) {
     lines.push('', "Une première analyse automatique a relevé ces points. Pour chacun, confirme-le ou indique s'il s'agit d'un faux positif :");
-    auto.forEach((f, i) => lines.push(`A${i + 1}. ${f.title} — ${f.refs.map(r => r.doc + ' p.' + r.page).join(' ; ')}`));
+    auto.forEach((f, i) => lines.push(`A${i + 1}. ${f.title} (${[...new Set(f.refs.map(r => dcode(r.doc) + ' p.' + r.page))].join(', ')})`));
   }
   lines.push('', "Règles : ne signale que ce que tu peux justifier par le texte des documents, cite toujours le document et la page, reste factuel et concis. N'invente aucun chiffre. " + AI_RULES_COMMON + " Ignore les en-têtes, pieds de page et numéros de page.",
     '', 'Réponds en deux parties :',
     '1) Une synthèse en 5 lignes maximum.',
     '2) Un bloc ```json contenant un tableau d\'objets de la forme :',
-    '{"titre": "court", "explication": "1 à 3 phrases", "priorite": "haute|moyenne|faible", "document": "nom du fichier", "page": 3, "extrait": "citation courte du passage", "statut": "nouveau|confirme|faux_positif", "ref_auto": "A2 ou null", "domaine": "un parmi : ' + DOMAINS.join(', ') + '", "recommandation": "correction ou action suggérée, courte (facultatif)"}',
+    '{"titre": "court", "explication": "1 à 3 phrases", "priorite": "haute|moyenne|faible", "document": "nom exact du fichier", "page": 3, "extrait": "citation courte du passage", "statut": "nouveau|confirme|faux_positif", "ref_auto": "A2 ou null", "domaine": "un parmi : ' + DOMAINS.join(', ') + '", "recommandation": "correction ou action suggérée, courte (facultatif)"}',
     'Les points automatiques confirmés ou infirmés doivent figurer avec leur ref_auto.');
   return lines.join('\n');
 }
@@ -1226,7 +1228,7 @@ $('#claudeBtn').onclick = () => {
   $('#aiSrc').value = store.get('ai') || 'Claude';
   $('#claudeDlg').showModal();
 };
-const MAX_URL = 7000;
+const MAX_URL = 12000;
 /* Logos : déposez les fichiers officiels dans logos/ (claude, chatgpt, gemini, grok en .svg, .png ou .webp) */
 document.querySelectorAll('.ai-logo[data-id]').forEach(el => {
   const exts = ['svg', 'png', 'webp'];
@@ -1241,29 +1243,37 @@ document.querySelectorAll('.ai-logo[data-id]').forEach(el => {
 });
 const AI_URL = { Claude: 'https://claude.ai/new', ChatGPT: 'https://chatgpt.com/', Grok: 'https://grok.com/' };
 const AI_PREFILL = { Claude: true, ChatGPT: true, Grok: true };
-document.querySelectorAll('.copy-ai').forEach(b => b.onclick = async () => {
+document.querySelectorAll('.copy-ai').forEach(b => b.onclick = () => {
   const ta = $('#' + b.dataset.src);
-  const ok = await copyText(ta.value, ta);
+  const ok = copyNow(ta.value, ta);
   if (ta.id === 'promptTxt') $('#aiSrc').value = 'Autre IA';
   toast(ok ? 'Prompt copié ✔ Collez-le dans votre IA et joignez les PDF' : 'Sélectionnez le texte et copiez-le manuellement');
 });
-document.querySelectorAll('.open-ai').forEach(b => b.onclick = async () => {
+
+// Copie synchrone (dans le geste utilisateur) : ne bloque jamais l'ouverture de l'IA
+function copyNow(txt, ta) {
+  let ok = false;
+  try { const sel = [ta.selectionStart, ta.selectionEnd]; ta.focus(); ta.select(); ok = document.execCommand('copy'); ta.setSelectionRange(...sel); } catch (e) { }
+  try { navigator.clipboard && navigator.clipboard.writeText(txt).catch(() => { }); ok = true; } catch (e) { }
+  return ok;
+}
+document.querySelectorAll('.open-ai').forEach(b => b.onclick = () => {
   const ai = b.dataset.ai, base = AI_URL[ai];
   const srcTa = $('#' + (b.dataset.src || 'promptTxt'));
   if (srcTa.id === 'promptTxt') $('#aiSrc').value = ai;
   store.set('ai', ai);
   const p = srcTa.value;
-  const copied = await copyText(p, srcTa);
-  const q = encodeURIComponent(p);
-  if (AI_PREFILL[ai] && q.length <= MAX_URL) {
-    window.open(base + '?q=' + q, '_blank', 'noopener');
-    toast(`Joignez les PDF dans ${ai} puis envoyez`);
-  } else {
-    window.open(base, '_blank', 'noopener');
-    const why = AI_PREFILL[ai] ? 'Prompt trop long pour le lien' : `${ai} n'accepte pas le préremplissage`;
-    toast(copied ? `${why} : collez-le (déjà copié), joignez les PDF` : `${why} : copiez-le manuellement`);
-  }
+  let q = encodeURIComponent(p), reduced = false;
+  if (q.length > MAX_URL && srcTa.id === 'promptTxt') { q = encodeURIComponent(buildPrompt(true)); reduced = true; }
+  // 1) ouvrir d'abord, de façon synchrone (sinon le navigateur peut bloquer ou perdre le lien)
+  if (AI_PREFILL[ai] && q.length <= MAX_URL) window.open(base + '?q=' + q, '_blank', 'noopener');
+  else window.open(base, '_blank', 'noopener');
+  // 2) copier ensuite le prompt complet (filet de sécurité)
+  const copied = copyNow(p, srcTa);
+  if (AI_PREFILL[ai] && q.length <= MAX_URL) toast(reduced ? `Prompt allégé saisi dans ${ai} (version complète copiée : collez-la à la place si besoin). Joignez les PDF.` : `Joignez les PDF dans ${ai} puis envoyez`);
+  else toast(copied ? 'Prompt trop long pour le lien : collez-le (déjà copié), joignez les PDF' : 'Prompt trop long : copiez-le manuellement');
 });
+
 if ($('#copyPromptBtn')) $('#copyPromptBtn').onclick = async () => {
   const ok = await copyText($('#promptTxt').value, $('#promptTxt'));
   toast(ok ? 'Prompt copié ✔' : 'Sélectionnez le texte et copiez-le manuellement');
